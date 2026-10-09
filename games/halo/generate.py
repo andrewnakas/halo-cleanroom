@@ -163,7 +163,7 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
 
 
 def generate_bitmaps(spec, lib, out, match=None):
-    from . import drawn
+    from . import drawn, functions
     drawn.CC0 = os.path.dirname(lib.root)
     facts = json.load(open(os.path.join(spec, "bitmaps.json")))
     n = 0
@@ -175,7 +175,11 @@ def generate_bitmaps(spec, lib, out, match=None):
             tops = [np.clip(make_image(lib, rel, tag, t, index, im, f), 0, 255).astype(np.uint8)
                     for f in range(b.faces)]
 
-            def level(mip, face, w, h, z, tops=tops):
+            volume = functions.VOLUMES.get(rel.lower()) if b.type == "3d" else None
+
+            def level(mip, face, w, h, z, tops=tops, volume=volume, depth=b.depth):
+                if volume:
+                    return volume(w, h, max(1, depth >> mip), z)
                 top = tops[face]
                 if (w, h) == (top.shape[1], top.shape[0]):
                     return top

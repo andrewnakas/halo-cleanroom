@@ -347,9 +347,9 @@ def black(name, tag, sk, index, im, face, base):
 
 
 def draw(rel, tag, skeleton, index, im, face, base):
-    from . import hud
+    from . import functions, hud
     name = rel.lower()
-    for pattern, fn in hud.DRAWERS + DRAWERS:
+    for pattern, fn in functions.DRAWERS + hud.DRAWERS + DRAWERS:
         if re.search(pattern, name):
             out = fn(name, tag, skeleton, index, im, face, base)
             if out is not None:

@@ -124,18 +124,35 @@ def main():
     # PCM tails collide by chance. The positive control (dirty vs dirty)
     # still fails every textured image and every audible sound.
     taint.MIN_DISTINCT = 10
-    index, batch, n_retail = np.zeros(0, np.uint64), [], 0
+    # the retail index stays in sorted chunks (one union of ~150M hashes needs several GB)
+    chunks, batch, n_retail = [], [], 0
     retail = {}
     for label, s in streams(dirty):
         retail[label] = hash(s)
         h, per = taint._hashes(s)
         batch.append(h[~per])
         n_retail += 1
-        if sum(len(x) for x in batch) > 20_000_000:
-            index = np.union1d(index, np.concatenate(batch))
+        if sum(len(x) for x in batch) > 8_000_000:
+            chunks.append(np.unique(np.concatenate(batch)))
             batch = []
     if batch:
-        index = np.union1d(index, np.concatenate(batch))
+        chunks.append(np.unique(np.concatenate(batch)))
+    del batch
+
+    def scan(labelled):
+        out = []
+        for label, s in labelled:
+            h, per = taint._hashes(s)
+            if not len(h):
+                continue
+            m = np.zeros(len(h), bool)
+            for index in chunks:
+                pos = np.minimum(np.searchsorted(index, h), len(index) - 1)
+                m |= index[pos] == h
+            m &= ~per
+            if m.any():
+                out.append((label, int(np.nonzero(m)[0][0]), int(m.sum()), taint._max_run(m)))
+        return out
     n_clean, hits = 0, []
 
     def counted():
@@ -147,18 +164,23 @@ def main():
                 same.append((item[0], 0, 0, len(item[1])))
             yield item
     same = []
-    hits = taint.scan(index, counted())
+    hits = scan(counted())
     hits = [h for h in hits if h[0] not in {x[0] for x in same}] + same
     # pixels: 16 bytes are only 4 RGBA texels, and a clean image is tinted to
     # the retail image's own colours, so 8 equal dark texels in a row happen
     # by chance; a bitmap fails at 16 texels (64 B). Samples and glyphs: 32 B.
     limit = lambda label: 2 * taint.FAIL_RUN if ".bitmap#" in label else taint.FAIL_RUN
+    # mathematical tables computed from their formula equal retail's by definition
+    allow = json.load(open(os.path.join(os.path.dirname(__file__), "taint_allow.json")))
     bad = sorted((h for h in hits if h[3] >= limit(h[0])), key=lambda h: -h[3])
+    math = [h for h in bad if h[0].split("#")[0] in allow]
+    bad = [h for h in bad if h[0].split("#")[0] not in allow]
     kept = sum(1 for root, _, files in os.walk(clean) for f in files if not f.endswith((".bitmap", ".sound", ".font")))
     for label, off, n, run in bad[:20]:
         print(f"  FAIL {label} run {run} B at {off}")
     print(f"taint: {n_clean} generated streams scanned against {n_retail} retail streams; "
-          f"{len(hits) - len(bad)} with short coincidental matches; {len(bad)} failing "
+          f"{len(hits) - len(bad) - len(math)} with short coincidental matches; "
+          f"{len(math)} formula tables allowed ({len(allow)} listed in taint_allow.json); {len(bad)} failing "
           f"(run >= {taint.FAIL_RUN} B, pixels {2 * taint.FAIL_RUN} B); {kept} kept tags not scanned")
     sys.exit(1 if bad else 0)
 

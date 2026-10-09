@@ -1,0 +1,4 @@
+{
+ "rasterizer/vector normalization.bitmap": "cube map of normalize(direction) * 0.5 + 0.5, computed in functions.py",
+ "rasterizer/distance attenuation.bitmap": "volume of 1 - r^2, computed in functions.py"
+}
