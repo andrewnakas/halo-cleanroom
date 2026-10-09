@@ -1,0 +1,1 @@
+﻿The owner's Halo CE Xbox disc image is ready (2026-10-09): D:\n64work\halo\halo_ce_usa_rev2.xiso.iso (USA Rev 2, 3.38 GB). Step 2 (dirty room) is unblocked. Dirty input only: never commit or publish it. Delete this note once read.
