@@ -144,3 +144,8 @@ Overpass-900.ttf,font,text,https://github.com/google/fonts/tree/main/ofl/overpas
 OpenCE-Regular.ttf,font,titles,https://github.com/OpenCommunityEdition/OpenCE/tree/main/port/assets/fonts (Newtown by Roger White; public domain; respaced),OFL-1.1
 opence_titles,menu-title-text,ui,https://github.com/OpenCommunityEdition/OpenCE/tree/main/port/assets/titles (text set in OpenCE-Regular),CC0-1.0
 piper:en_US-ryan-high,tts-voice,announcer,https://github.com/rhasspy/piper (synthetic voice; placeholder),MIT (engine)
+piper:en_US-amy-medium,tts-voice,dialogue (placeholder),https://github.com/rhasspy/piper (synthetic voice; placeholder until the owner's recordings),MIT (engine)
+piper:en_US-joe-medium,tts-voice,dialogue (placeholder),https://github.com/rhasspy/piper (synthetic voice; placeholder until the owner's recordings),MIT (engine)
+piper:en_US-kristin-medium,tts-voice,dialogue (placeholder),https://github.com/rhasspy/piper (synthetic voice; placeholder until the owner's recordings),MIT (engine)
+piper:en_US-hfc_female-medium,tts-voice,dialogue (placeholder),https://github.com/rhasspy/piper (synthetic voice; placeholder until the owner's recordings),MIT (engine)
+vector_palette.json,table,bump-map normals,https://github.com/OpenCommunityEdition/OpenCE (source/bitmaps/bitmaps.c),CC0-1.0

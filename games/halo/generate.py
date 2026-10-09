@@ -228,8 +228,10 @@ def generate_bitmaps(spec, lib, out, match=None):
             b.write(level)
             n += 1
         t.save(os.path.join(out, rel))
-    if not match:
-        json.dump(lib.used, open(os.path.join(out, "..", "materials_used.json"), "w"), indent=0)
+    used_path = os.path.join(out, "..", "materials_used.json")
+    used = json.load(open(used_path)) if match and os.path.exists(used_path) else {}
+    used.update(lib.used)
+    json.dump(used, open(used_path, "w"), indent=0)
     print(f"bitmaps: {n} images in {len(facts)} tags, {len(set(lib.used.values()))} CC0 materials used")
 
 
@@ -409,8 +411,10 @@ def generate_sounds(spec, lib, out, match=None):
                 pcm = np.repeat(pcm[:, None], s["channels"], 1)
                 t.replace(t.permutations[i], encode_xbox_adpcm(pcm))
         t.save(os.path.join(out, rel))
-    if not match:
-        json.dump(lib.used, open(os.path.join(out, "..", "sounds_used.json"), "w"), indent=0)
+    used_path = os.path.join(out, "..", "sounds_used.json")
+    used = json.load(open(used_path)) if match and os.path.exists(used_path) else {}
+    used.update(lib.used)                 # (a partial run adds to the record)
+    json.dump(used, open(used_path, "w"), indent=0)
     print(f"sounds: {len(facts)} tags, {sum(len(s['perms']) for s in facts.values())} permutations, "
           f"{spoken} spoken lines, {len(set(lib.used.values()))} CC0 sources used")
 
