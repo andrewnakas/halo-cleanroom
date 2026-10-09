@@ -1,7 +1,16 @@
 # Halo: Combat Evolved clean room: status
 
 ## Now
-- Step 0 done, step 1 in progress (web build of OpenCE).
+- Step 0 done. **Step 1 builds**: `ninja web` -> `build/web/site` (halo.wasm 7.3 MB). Headless Chrome
+  shows the launcher with all checks green (threads, WebGL2 in worker, OPFS, memory).
+  Gameplay cannot be tested until there are maps (XISO or clean maps).
+- Launcher has a **"Download clean maps"** path: reads `clean/maps.json`
+  (`{version, files:[{name,size,sha256}]}`), downloads `clean/*.map` into OPFS `maps/`, checks SHA-256,
+  writes the `.complete` marker; only `ui.map` is required to start. BYO XISO import unchanged.
+- Clean-room tools ready (games/halo): `xiso_extract.py` (dirty: XDVDFS -> maps/), `codecs.py`
+  (DXT1/3/5 + Xbox ADPCM encode/decode, self-test), `fetch_cc0.py` (ambientCG CC0 library ->
+  `D:
+64work\halo\cc0	extures`, rows in `assets/LICENSES.csv`).
 - Step 2 (dirty room): **BLOCKED on XISO** (owner drops it in `D:\n64work\halo\`).
 
 ## Decisions (2026-10-08)
@@ -23,6 +32,12 @@
 - Map builder: Invader 0.55.0 (GPL tool, output untainted) in `D:\n64work\halo\tools\invader`;
   `invader-build -g xbox-ntsc` builds Xbox cache files, so clean maps can target the native
   Xbox format the decomp loads.
+
+- Upstream `port/assets/hud` = traced redraws of retail HUD sheets: **left out of the clean build**
+  (we draw our own HUD); they are CRC-gated to retail pixels anyway. `port/assets/fonts`
+  (Overpass OFL, Newtown PD) are clean: keep, they draw all text at display resolution.
+- Clean bitmaps/sounds: rewrite the pixel/sample blobs of the extracted tags in the tag's own format
+  (codecs.py) and keep every other field, rather than rebuilding through invader-bitmap colour plates.
 
 ## Build
 ```
