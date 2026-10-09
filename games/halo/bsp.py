@@ -190,6 +190,8 @@ def bake(mats, lights, ambient, sizes):
                 for sm, d, c in maps:
                     ndl = np.clip(N @ d, 0, 1)
                     L = L + c[None] * (ndl * sm.visible(P, N))[:, None]
+                    # light bounced off the ground and scattered by the sky fills the shade
+                    L = L + 0.22 * c[None] * (0.6 + 0.4 * N[:, 2:3])
                 for d, c in fills:
                     L = L + 0.5 * c[None] * np.clip(N @ d, 0, 1)[:, None]
             else:       # no sun here (interiors): light from above and a little from every side
@@ -220,23 +222,46 @@ def filler_colour(pages):
     return np.median(empty, 0) if len(empty) else None
 
 
-def tint(light, cover, grid, filler=None, level=None):
+def lit_cover(cover):
+    """Share of each grid cell that is lit texels (the charts carry a rim of spread texels)."""
+    return cell_cover(ndimage.binary_dilation(cover, iterations=2))[..., None]
+
+
+def level_hue(pages, filler):
+    """The lit colour's red/blue and green/blue ratios, from the cells that are nearly all
+    lit (pages: [(grid, cover)]); grey when there are none."""
+    ratios = []
+    for grid, cover in pages:
+        g = np.asarray(grid, np.float32).reshape(4, 4, 3)
+        cov = lit_cover(cover)
+        full = cov[..., 0] >= 0.9
+        c = ((g - (1 - cov) * filler) / np.maximum(cov, 1e-3))[full]
+        c = c[c[:, 2] > 8]
+        ratios.append(c[:, :2] / c[:, 2:3])
+    ratios = np.concatenate(ratios) if ratios else np.zeros((0, 2))
+    return np.clip(np.median(ratios, 0), 0.4, 2.5) if len(ratios) else np.array([1.0, 1.0])
+
+
+def tint(light, cover, grid, filler=None, hue=None):
     """Our lighting carried on the kept 4x4 colour grid of the page -> (h,w,3) float 0..255.
-    A cell's kept colour mixes the lit charts with the page's unused texels, so the charts'
-    share is solved from our own coverage; inside a cell, brightness follows our lighting."""
+    A cell's kept colour mixes the lit charts with the page's unused texels. The unused
+    colour has no blue, so a cell's blue divided by our coverage gives its lit brightness;
+    red and green follow the level's lit hue, except in cells that are nearly all lit,
+    which keep their own solved colour. Inside a cell, brightness follows our lighting."""
     h, w = cover.shape
     g = np.asarray(grid, np.float32).reshape(4, 4, 3)
     if not cover.any():
         return np.asarray(Image.fromarray(g.astype(np.uint8)).resize((w, h), Image.BICUBIC), np.float32)
-    if filler is not None:
-        # (the charts carry a rim of spread texels: count it as lit)
-        cov = cell_cover(ndimage.binary_dilation(cover, iterations=2))[..., None]
-        page = np.clip((g.sum((0, 1)) - (1 - cov).sum((0, 1)) * filler) / max(float(cov.sum()), 1e-3), 0, 255)
-        if cov.sum() < 1.5 and level is not None:      # a page that is nearly empty: the level's lit colour
-            page = level
-        solved = np.clip((g - (1 - cov) * filler) / np.maximum(cov, 1e-3), 0, 255)
-        trust = np.clip((cov - 0.5) / 0.4, 0, 1)        # mostly-lit cells keep their own colour
-        g = trust * solved + (1 - trust) * page
+    if filler is not None and filler[2] < 16 and hue is not None:
+        cov = lit_cover(cover)
+        blue = g[..., 2:3] / np.maximum(cov, 0.2)
+        by_hue = np.concatenate([blue * hue[0], blue * hue[1], blue], -1)
+        solved = (g - (1 - cov) * filler) / np.maximum(cov, 1e-3)
+        trust = np.clip((cov - 0.75) / 0.2, 0, 1)
+        g = np.clip(trust * solved + (1 - trust) * by_hue, 0, 255)
+        empty = cov[..., 0] < 0.02
+        if empty.any() and not empty.all():
+            g[empty] = g[~empty].mean(0)
     luma = light @ np.array([0.3, 0.59, 0.11], np.float32)
     ys = (np.arange(5) * h) // 4
     xs = (np.arange(5) * w) // 4
@@ -289,14 +314,8 @@ def lightmap_pages(spec, bitmap_rel):
             del _cache[key]              # one level's pages at a time
         grids = {i: facts["images"][i]["faces"][0]["grid"] for i in baked}
         filler = filler_colour([(grids[i], cover) for i, (light, cover) in baked.items()])
-        level = None
-        if filler is not None:
-            covs = {i: cell_cover(ndimage.binary_dilation(cover, iterations=2))[..., None] for i, (_, cover) in baked.items()}
-            total = sum(float(c.sum()) for c in covs.values())
-            lit = sum(np.asarray(grids[i], np.float32).reshape(4, 4, 3).sum((0, 1)) - (1 - covs[i]).sum((0, 1)) * filler
-                      for i in baked)
-            level = np.clip(lit / max(total, 1e-3), 0, 255)
-        pages = {i: tint(light, cover, grids[i], filler, level) for i, (light, cover) in baked.items()}
+        hue = level_hue([(grids[i], cover) for i, (_, cover) in baked.items()], filler) if filler is not None else None
+        pages = {i: tint(light, cover, grids[i], filler, hue) for i, (light, cover) in baked.items()}
         _cache["filler"] = filler
         _cache[bitmap_rel] = pages
     return _cache[bitmap_rel]

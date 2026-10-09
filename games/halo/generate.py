@@ -141,6 +141,16 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
             alpha = kept
         elif facts["alpha"] != "opaque":
             alpha = base.mean(-1)
+    elif kind == "bump" and im["format"] == "p8":
+        # a palettized bump map: surface normals from the relief of the CC0 material that
+        # the neighbouring diffuse texture uses (the palette is the engine's table of normals)
+        twin = re.sub(r"[ _-]?bump", "", rel)                # the diffuse texture's name
+        src = lib.pick(material_class(twin), twin)
+        d = lib.detail(src, w, h)
+        gy, gx = np.gradient(d.astype(np.float32))
+        n = np.stack([-gx * 2.2, -gy * 2.2, np.ones_like(gx)], -1)
+        n /= np.linalg.norm(n, axis=-1, keepdims=True)
+        return np.concatenate([n * 127.5 + 127.5, alpha[..., None]], -1)      # quantised per level in generate_bitmaps
     elif kind == "bump":
         rgb = np.broadcast_to(np.asarray(facts["grid"], np.float32).mean(0), (h, w, 3)).copy()
         if kept is not None:
@@ -174,6 +184,22 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
     return np.concatenate([np.clip(rgb, 0, 255), alpha[..., None]], -1)
 
 
+_palette = None
+
+
+def palette_indices(rgba):
+    """Normals as colours -> the nearest entry of the engine's bump palette, as a grey image
+    whose brightness is the index (how the p8 encoder stores it)."""
+    global _palette
+    from scipy.spatial import cKDTree
+    if _palette is None:
+        table = json.load(open(os.path.join(os.path.dirname(__file__), "vector_palette.json")))
+        _palette = cKDTree(np.asarray(table, np.float32))
+    index = _palette.query(np.asarray(rgba, np.float32)[..., :3].reshape(-1, 3))[1].astype(np.uint8)
+    index = index.reshape(rgba.shape[:2])
+    return np.stack([index, index, index, np.full_like(index, 255)], -1)
+
+
 def generate_bitmaps(spec, lib, out, match=None):
     from . import drawn, functions
     drawn.SPEC = spec
@@ -190,13 +216,15 @@ def generate_bitmaps(spec, lib, out, match=None):
 
             volume = functions.VOLUMES.get(rel.lower()) if b.type == "3d" else None
 
-            def level(mip, face, w, h, z, tops=tops, volume=volume, depth=b.depth):
+            vectors = im["format"] == "p8" and kind_of(rel, tag, im) == "bump"
+
+            def level(mip, face, w, h, z, tops=tops, volume=volume, depth=b.depth, vectors=vectors):
                 if volume:
                     return volume(w, h, max(1, depth >> mip), z)
                 top = tops[face]
-                if (w, h) == (top.shape[1], top.shape[0]):
-                    return top
-                return np.asarray(Image.fromarray(top).resize((w, h), Image.BOX))
+                if (w, h) != (top.shape[1], top.shape[0]):
+                    top = np.asarray(Image.fromarray(top).resize((w, h), Image.BOX))
+                return palette_indices(top) if vectors else top
             b.write(level)
             n += 1
         t.save(os.path.join(out, rel))
@@ -357,7 +385,7 @@ def generate_sounds(spec, lib, out, match=None):
                 lib.used[rel] = "piper:en_US-ryan-high"
             elif "/dialog/" in low and str(h) in spoken_text.get(rel, {}).get("lines", {}):
                 # a transcribed line (text is the kept fact) in a placeholder voice
-                who = spoken_text[rel]["who"]
+                who = dialog.speaker(rel)
                 line = spoken_text[rel]["lines"][str(h)]["text"]
                 said = dialog.speak(who, line, rate, max(total, 1))
                 src = dialog.place(said, max(total, 1), [v for i in chain for v in perms[i]["outline"]])

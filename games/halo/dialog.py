@@ -49,7 +49,7 @@ def speaker(rel):
         return ""
     for key, who in (("cortana", "cortana"), ("keyes", "keyes"), ("captain", "keyes"), ("chief", "chief"), ("johnson", "sarge"),
                      ("sarge", "sarge"), ("sargeant", "sarge"), ("pilot", "pilot"), ("foehammer", "pilot"),
-                     ("monitor", "monitor"), ("spark", "monitor"), ("grunt", "grunt"), ("crewman", "crewman"),
+                     ("monitor", "monitor"), ("spark", "monitor"), ("grunt", "grunt"), ("crewman", "crewman"), ("cryo", "crewman"), ("captkeyes", "keyes"),
                      ("crew", "crewman"), ("bisenti", "marine2"), ("mendoza", "marine3"), ("jenkins", "marine2"),
                      ("fitzgerald", "marine3"), ("female", "woman"), ("marine", "marine")):
         if key in base or f"/{key}" in low:

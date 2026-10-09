@@ -81,7 +81,10 @@ def main():
     args = [exe, "--headless=new", f"--user-data-dir={prof}", f"--remote-debugging-port={a.port}",
             "--remote-allow-origins=*", "--no-first-run", "--autoplay-policy=no-user-gesture-required",
             f"--window-size={a.size}", "--enable-unsafe-webgpu", "--ignore-gpu-blocklist",
-            "--enable-gpu-rasterization", "--js-flags=--max-old-space-size=8192"]
+            "--enable-gpu-rasterization", "--js-flags=--max-old-space-size=8192",
+            # a headless page counts as occluded: without these its animation frames slow to a crawl
+            "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows", "--disable-features=CalculateNativeWinOcclusion"]
     if a.webgl:
         args += ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"]
     p = subprocess.Popen(args + ["about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

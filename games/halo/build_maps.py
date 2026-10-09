@@ -60,11 +60,63 @@ def extract(names):
     last = run([tool("bludgeon"), "-t", f"{dirty}/tags", "-T", "invalid-enums", "-T", "out-of-range",
                 "-T", "invalid-indices", "-b", "*"], "bludgeon.log", check=False)
     print(f"bludgeon: {last}")
+    repair(f"{dirty}/tags")
     last = run([sys.executable, "-m", "games.halo.extract_tags", f"{dirty}/tags", f"{WORK}/spec", "--add"], "spec.log")
     print(f"spec: {last}")
     sp = f"{WORK}/clean/tags_sp/globals"
     os.makedirs(sp, exist_ok=True)
     shutil.copyfile(f"{dirty}/tags_sp/globals/globals.globals", f"{sp}/globals.globals")
+
+
+def repair(tree):
+    """Retail lens flares name reflection bitmaps their bitmap tag does not have (the builder
+    refuses them, the game clamps): point those at the tag's last bitmap."""
+    import struct
+
+    from . import hek
+    fixed = 0
+    for folder, _, files in os.walk(tree):
+        for name in files:
+            if not name.endswith(".lens_flare"):
+                continue
+            path = os.path.join(folder, name)
+            t = hek.Tag(path)
+            ref = t.root["bitmap"]
+            if not ref:
+                continue
+            bitmap = os.path.join(tree, ref.replace(chr(92), "/") + ".bitmap")
+            if not os.path.exists(bitmap):
+                continue
+            head = open(bitmap, "rb").read(64 + 108)
+            count = struct.unpack(">I", head[64 + 96:64 + 100])[0]      # the bitmap data block's count
+            changed = False
+            for r in t.root["reflections"]:
+                kind, off, n, fmt = r.layout.fields["bitmap index"]
+                if r["bitmap index"] >= max(count, 1) and r["bitmap index"] != 0xFFFF:
+                    struct.pack_into(">H", t.data, r.offset + off, max(count, 1) - 1)
+                    changed = True
+            if changed:
+                open(path, "wb").write(t.data)
+                fixed += 1
+    # script sources keep a few Windows-1252 characters (an ellipsis in debug prints) that
+    # the script compiler rejects: a full stop of the same length
+    scripts = 0
+    for folder, _, files in os.walk(tree):
+        for name in files:
+            if not name.endswith(".scenario"):
+                continue
+            path = os.path.join(folder, name)
+            t = hek.Tag(path)
+            changed = False
+            for f in t.root["source files"]:
+                view = f["source"]
+                for i in [i for i, b in enumerate(bytes(view)) if b > 127]:
+                    view[i] = ord(".")
+                    changed = True
+            if changed:
+                open(path, "wb").write(t.data)
+                scripts += 1
+    print(f"repair {tree}: {fixed} lens flares, {scripts} script sources")
 
 
 def generate():
@@ -88,6 +140,9 @@ def main():
     step, names = sys.argv[1], []
     for a in sys.argv[2:]:
         names += GROUPS.get(a, [a])
+    if step == "repair":
+        for tree in ("dirty/tags", "spec/tags", "clean/tags"):
+            repair(os.path.join(WORK, tree))
     if step in ("extract", "all"):
         extract(names)
     if step in ("generate", "all"):

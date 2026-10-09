@@ -86,6 +86,7 @@ def effect(name, tag, sk, index, im, face, base):
     mask = np.zeros((h, w), np.float32)
     for k, (l, t, r, b) in enumerate(boxes):
         x0, y0, x1, y1 = int(round(l * w)), int(round(t * h)), int(round(r * w)), int(round(b * h))
+        x0, y0, x1, y1 = max(x0, 0), max(y0, 0), min(x1, w), min(y1, h)      # (some rectangles overhang)
         if x1 - x0 < 2 or y1 - y0 < 2:
             continue
         m = shape(kind, x1 - x0, y1 - y0, np.random.default_rng(_seed(name, k)))
@@ -97,7 +98,7 @@ def effect(name, tag, sk, index, im, face, base):
     if kept is not None:
         inside = np.zeros((h, w), bool)
         for l, t, r, b in boxes:
-            inside[int(round(t * h)):int(round(b * h)), int(round(l * w)):int(round(r * w))] = True
+            inside[max(int(round(t * h)), 0):int(round(b * h)), max(int(round(l * w)), 0):int(round(r * w))] = True
         boxy = inside.any() and (kept[inside] >= 250).mean() > 0.93
     if boxy:
         # the kept alpha is a full rectangle per sprite: the picture lives in the colour
