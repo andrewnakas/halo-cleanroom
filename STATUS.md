@@ -1,17 +1,24 @@
 # Halo: Combat Evolved clean room: status
 
-## Now (2026-10-09)
+## Now (2026-10-09 morning)
 - **Web build runs the game**: OpenCE (fqlx's wasm port) built with emsdk 6.0.10; headless Chrome boots the
-  main menu and plays Blood Gulch (first person, HUD, world) from **clean maps**.
-- **Clean maps v0.1**: `ui.map` (9.3 MB) and `bloodgulch.map` (21.8 MB), built by Invader (`-g xbox-ntsc`) from
-  kept tags + regenerated bitmaps (744 images), sounds (1098 permutations) and fonts (4).
-- **Taint (v0.1 tags, 2026-10-09 05:0x): `2009 generated streams scanned against 2009 retail streams; 364 with
-  short coincidental matches; 0 failing`.** Log: `D:/n64work/halo/taint.log`. The staged maps are those tags.
-- Keyboard input checked headlessly (W walks forward); pregame lobby and HUD readable.
+  main menu and plays from **clean maps** (first person, HUD, world; keyboard W walks).
+- **Clean maps v0.2**: the menu (`ui`) + **all 13 multiplayer maps** (274 MB), built by Invader from kept tags
+  + regenerated bitmaps (1050 images), sounds (1439 permutations), fonts (4). Blood Gulch, Beaver Creek and
+  Sidewinder were opened in the browser; the other ten are built, not yet looked at.
+- **Taint (v0.2 tags): `2691 generated streams scanned against 2691 retail streams; 491 with short coincidental
+  matches; 0 failing`.** Log `D:/n64work/halo/taint_v02.log`. The staged maps are those tags (no tag is newer).
 - **NOT PUBLISHED: BLOCKED on permission.** Creating the public repo was denied by Claude Code's auto-mode
-  classifier ("Create Public Surface"). Everything is staged: site in `D:/n64work/halo/pages` (git, branch
-  gh-pages, 36 MB), tools repo committed on `main`. **To publish, run `sh tools/publish_halo.sh`** (or tell
-  the session to). The OpenCE source branch is already public: github.com/andrewnakas/OpenCE branch `web`.
+  classifier ("Create Public Surface"). Staged: site v0.2 in `D:/n64work/halo/pages` (git, branch gh-pages),
+  tools repo on `main`. **To publish, run `sh tools/publish_halo.sh`** (or tell the session to).
+  Already public (code only): github.com/andrewnakas/OpenCE branch `web`.
+- Launcher: "Download Blood Gulch (30 MB)" (menu + that map) and "All 13 maps (274 MB)"; "Play Blood Gulch"
+  button; bring-your-own-disc import unchanged.
+- Since v0.1: effect sprites drawn (flares, sparks, puffs, splats, stars, planets; `effects.py`), engine function
+  textures from formulas (`functions.py`), incremental generate (`--add`), taint index cached on disk
+  (`--index D:/n64work/halo/taint_index`, extended when new retail tags appear).
+- Memory: the machine ran out of commit twice overnight (other sessions); jobs here retry. Claude Code also
+  stopped two idle background shells (old XISO watcher, first texture fetch) for the same reason.
 
 ## Pipeline (all under `games/halo/`, work dirs under `D:\n64work\halo\`)
 | Step | Command | Output |
@@ -19,9 +26,9 @@
 | Dirty: maps | `python -m games.halo.xiso_extract <xiso> D:/n64work/halo/dirty` | `dirty/maps` (24 maps, 1.86 GB) |
 | Dirty: tags | `invader-extract -m dirty/maps -t dirty/tags -r dirty/maps/<map>.map` then `invader-bludgeon -T invalid-enums -T out-of-range -T invalid-indices -b "*"` + one lens flare index (`headlights scorpion` reflection 0 -> bitmap 0) | `dirty/tags` |
 | Spec (kept facts) | `python -m games.halo.extract_tags dirty/tags spec` | `spec/tags` (kept tags + skeletons), `bitmaps.json`, `sounds.json` |
-| Clean tags | `python -m games.halo.generate spec cc0 clean/tags [--only bitmaps --match <regex>]` | `clean/tags` |
+| Clean tags | `python -m games.halo.generate spec cc0 clean/tags [--only bitmaps --match <regex>] [--add]` | `clean/tags` |
 | Maps | `invader-build -g xbox-ntsc -t clean/tags -m clean/maps "levels\ui\ui"` (and `levels\test\bloodgulch\bloodgulch`) | `clean/maps` |
-| Taint | `python -m games.halo.taint dirty/tags clean/tags` | must print `0 failing` |
+| Taint | `python -m games.halo.taint dirty/tags clean/tags --index taint_index` | must print `0 failing` |
 | Site | `python -m games.halo.make_site OpenCE/build/web/site clean/maps site_clean --version N` | `site_clean` |
 | Look | `python ports/wasm/serve.py site_clean 8072`, `python ports/wasm/cdp_shot.py <out> --url "http://localhost:8072/index.html?auto=1&quick=host" --secs 60 --webgl`; sheets: `python -m games.halo.sheet <tags> out.png <regex>` | screenshots |
 
@@ -55,11 +62,12 @@ Web build: `powershell -File D:\n64work\halo\build_web.ps1` (configure `--releas
 - Upstream `port/assets/hud` (traced HUD redraws) left out of our wasm; fonts and titles kept.
 
 ## Known gaps (next)
-- Function textures in `rasterizer/` (vector normalization, fog, glow) are only smooth grids: lighting and
-  fog may look off; draw them from their formulas.
-- Sprites without outlines: particles, decals, lens flares, foliage are soft blobs; HUD message icons are
-  plain shapes; level/map pictures are colour bands (render them from the BSP).
-- Main menu lists maps that are not built yet: only `ui` and `bloodgulch` exist. Next maps: a30, the rest of MP.
+- Fog density and camouflage tables in `rasterizer/` are still smooth grids (normalization cube, attenuation,
+  glow, video noise/mask are computed).
+- Effect sprites are generic shapes by name (not checked in play yet); foliage keeps no outline; HUD message
+  icons are plain shapes; a waypoint arrow with "15m" shows over the motion sensor; level/map pictures are colour bands (render them from the BSP).
+- Campaign maps are not built (the Campaign menu will fail). Next: a30. Dialogue needs a text source
+  (question: may the spoken lines be transcribed from the retail audio as text facts?).
 - Lightmaps are 4x4 grids per lightmap page (flat lighting).
 - Meter fill direction (alpha ramp) is a guess; check shield/health drain in play.
 - Voices: announcer is plain Piper; no practice pack yet.
