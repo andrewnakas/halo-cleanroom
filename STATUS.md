@@ -33,7 +33,7 @@
   Xbox format the decomp loads.
 
 - Upstream `port/assets/hud` = traced redraws of retail HUD sheets: **left out of the clean build**
-  (we draw our own HUD); they are CRC-gated to retail pixels anyway. `port/assets/fonts`
+  via new `configure.py --web-clean` (embeds the 35 re-typeset titles + fonts only; we draw our own HUD); they are CRC-gated to retail pixels anyway. `port/assets/fonts`
   (Overpass OFL, Newtown PD) are clean: keep, they draw all text at display resolution.
 - Clean bitmaps/sounds: rewrite the pixel/sample blobs of the extracted tags in the tag's own format
   (codecs.py) and keep every other field, rather than rebuilding through invader-bitmap colour plates.
@@ -42,7 +42,7 @@
 ```
 cd D:\n64work\halo\OpenCE
 set EM_CACHE=D:/n64work/emcache
-python configure.py --release --web-emcc D:/n64work/emsdk/upstream/emscripten/emcc.exe
+python configure.py --release --web-clean --web-emcc D:/n64work/emsdk/upstream/emscripten/emcc.exe
 ninja -j6 web      (needs Git usr\bin on PATH for cp)
 ```
 Output: `build/web/site`.
