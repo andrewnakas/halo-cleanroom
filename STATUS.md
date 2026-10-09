@@ -117,19 +117,19 @@ Web build: `powershell -File D:\n64work\halo\build_web.ps1` (configure `--releas
   retail's own colours. Added an exact-stream check. Positive control (dirty vs dirty) fails 17 of 17.
 - Upstream `port/assets/hud` (traced HUD redraws) left out of our wasm; fonts and titles kept.
 
-## Known gaps (asset side, from session 1; being worked through in "Next")
-- Effect sprites are generic shapes; HUD message icons are plain shapes; waypoint arrow + "15m" over the motion
-  sensor; level/map pictures are colour bands; lightmaps flat; camouflage / reference bump / P8 bumps smooth or
-  flat; sky galaxy and ring dull; announcer plain Piper; no practice pack; gamepad not verified.
+## Known gaps (asset side)
+- Fixed this session: HUD shapes and meters, message icons, effect sprites, foliage, level pictures, lightmaps,
+  palettized bump maps, sky ring and clouds, practice pack.
+- Open: camouflage distortion and reference bump tables (smooth grids), the galaxy texture, announcer is plain Piper,
+  effect sheets whose picture lives in the colour (no outline kept) are still shapes by name.
 
 ## For the morning
 - Play https://andrewnakas.github.io/halo-cleanroom/ : Campaign from the menu (Enter/Space = A, Backspace/F = B,
   1 or V = switch weapon, Tab = scoreboard).
-- **Record voices**: `D:
-64work\halo\practice_pack\<character>\` (cortana, keyes, chief, sarge, pilot, monitor,
+- **Record voices**: `D:/n64work/halo/practice_pack/<character>/` (cortana, keyes, chief, sarge, pilot, monitor,
   marine, grunt, crewman): `SCRIPT.txt` + `practice_<who>_call_and_response.wav` (local only, from your disc).
 - **HUD message icons** come from the kept 2-bit outline, so the sheet shows the game's own pictograms and button
   letters as silhouettes (the rule you chose). Say so if you would rather have them redrawn from briefs.
 - Windows Terminal's memory swings to ~30 GB now and then; restarting it would steady the machine.
-- Look at `D:
-64work\halo\shots\smoke\campaign1.png`, `campaign2.png`, `clean_hud2.png`, `clean_pics.png`.
+- Look at `D:/n64work/halo/shots/smoke/campaign1.png`, `campaign2.png` and `D:/n64work/halo/shots/clean_hud2.png`,
+  `clean_pics.png`.
