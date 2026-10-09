@@ -132,90 +132,67 @@ STEPS = np.array([
     724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660,
     4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818,
     18500, 20350, 22385, 24623, 27086, 29794, 32767])
-INDEX = [-1, -1, -1, -1, 2, 4, 6, 8]
+INDEX = np.array([-1, -1, -1, -1, 2, 4, 6, 8])
 
 
 def _ima_step(pred, idx, code):
-    step = int(STEPS[idx])
-    diff = step >> 3
-    if code & 4:
-        diff += step
-    if code & 2:
-        diff += step >> 1
-    if code & 1:
-        diff += step >> 2
-    pred = pred - diff if code & 8 else pred + diff
-    pred = max(-32768, min(32767, pred))
-    idx = max(0, min(88, idx + INDEX[code & 7]))
-    return pred, idx
+    """one sample for every block at once (arrays over blocks)"""
+    step = STEPS[idx]
+    diff = (step >> 3) + np.where(code & 4, step, 0) + np.where(code & 2, step >> 1, 0) + np.where(code & 1, step >> 2, 0)
+    pred = np.clip(np.where(code & 8, pred - diff, pred + diff), -32768, 32767)
+    return pred, np.clip(idx + INDEX[code & 7], 0, 88)
 
 
 def encode_xbox_adpcm(pcm):
-    """pcm (n, channels) int16 -> bytes; pads to 64-sample blocks"""
+    """pcm (n, channels) int16 -> bytes; pads to 64-sample blocks. Each block
+    starts from its own first sample and a step fitted to its opening slope."""
     pcm = np.asarray(pcm, np.int16)
     if pcm.ndim == 1:
         pcm = pcm[:, None]
     n, ch = pcm.shape
     blocks = (n + 63) // 64
-    pcm = np.pad(pcm, ((0, blocks * 64 - n), (0, 0)))
-    out = bytearray()
-    state = [(int(pcm[0, c]), 0) for c in range(ch)]
-    for b in range(blocks):
-        seg = pcm[b * 64:(b + 1) * 64]
-        heads, codes = [], []
-        for c in range(ch):
-            pred, idx = int(seg[0, c]), state[c][1]
-            heads.append(np.array([pred], "<i2").tobytes() + bytes([idx, 0]))
-            cs = []
-            for s in seg[1:, c]:
-                step = int(STEPS[idx])
-                d = int(s) - pred
-                code = 8 if d < 0 else 0
-                d = abs(d)
-                if d >= step:
-                    code |= 4
-                    d -= step
-                if d >= step >> 1:
-                    code |= 2
-                    d -= step >> 1
-                if d >= step >> 2:
-                    code |= 1
-                pred, idx = _ima_step(pred, idx, code)
-                cs.append(code)
-            cs.append(0)  # 63 coded samples + pad nibble
-            state[c] = (pred, idx)
-            codes.append(cs)
-        out += b"".join(heads)
-        for word in range(8):  # 8 words of 8 nibbles per channel, interleaved
-            for c in range(ch):
-                nib = codes[c][word * 8:(word + 1) * 8]
-                out += bytes(nib[i] | nib[i + 1] << 4 for i in range(0, 8, 2))
-    return bytes(out)
+    seg = np.pad(pcm, ((0, blocks * 64 - n), (0, 0))).reshape(blocks, 64, ch).astype(np.int64)
+    pred = seg[:, 0, :].copy()
+    slope = np.abs(np.diff(seg[:, :8, :], axis=1)).mean(1)
+    idx = np.clip(np.searchsorted(STEPS, slope), 0, 88)
+    head = np.zeros((blocks, ch, 4), np.uint8)
+    head[..., 0], head[..., 1], head[..., 2] = pred & 255, (pred >> 8) & 255, idx
+    codes = np.zeros((blocks, 64, ch), np.uint8)
+    for i in range(1, 64):
+        step = STEPS[idx]
+        d = seg[:, i, :] - pred
+        code = np.where(d < 0, 8, 0)
+        d = np.abs(d)
+        c4 = d >= step
+        d = d - np.where(c4, step, 0)
+        c2 = d >= step >> 1
+        d = d - np.where(c2, step >> 1, 0)
+        code = code | np.where(c4, 4, 0) | np.where(c2, 2, 0) | np.where(d >= step >> 2, 1, 0)
+        pred, idx = _ima_step(pred, idx, code)
+        codes[:, i - 1, :] = code
+    nib = codes.reshape(blocks, 8, 4, 2, ch)                 # word, byte, nibble
+    body = (nib[:, :, :, 0, :] | nib[:, :, :, 1, :] << 4)    # (blocks, 8 words, 4 bytes, ch)
+    body = body.transpose(0, 1, 3, 2).reshape(blocks, 8 * ch * 4)
+    return np.concatenate([head.reshape(blocks, ch * 4), body], 1).tobytes()
 
 
 def decode_xbox_adpcm(data, channels):
     bsz = 36 * channels
     blocks = len(data) // bsz
-    out = np.zeros((blocks * 64, channels), np.int16)
-    for b in range(blocks):
-        blk = data[b * bsz:(b + 1) * bsz]
-        preds, idxs = [], []
-        for c in range(channels):
-            preds.append(int(np.frombuffer(blk[4 * c:4 * c + 2], "<i2")[0]))
-            idxs.append(blk[4 * c + 2])
-            out[b * 64, c] = preds[c]
-        pos = [1] * channels
-        body = blk[4 * channels:]
-        for word in range(8):
-            for c in range(channels):
-                chunk = body[(word * channels + c) * 4:(word * channels + c) * 4 + 4]
-                for byte in chunk:
-                    for code in (byte & 15, byte >> 4):
-                        if pos[c] < 64:
-                            preds[c], idxs[c] = _ima_step(preds[c], idxs[c], code)
-                            out[b * 64 + pos[c], c] = preds[c]
-                            pos[c] += 1
-    return out
+    raw = np.frombuffer(data[:blocks * bsz], np.uint8).reshape(blocks, bsz)
+    head = raw[:, :4 * channels].reshape(blocks, channels, 4).astype(np.int64)
+    pred = (head[..., 0] | head[..., 1] << 8)
+    pred = np.where(pred >= 32768, pred - 65536, pred)
+    idx = np.clip(head[..., 2], 0, 88)
+    body = raw[:, 4 * channels:].reshape(blocks, 8, channels, 4)
+    codes = np.stack([body & 15, body >> 4], -1).reshape(blocks, 8, channels, 8).transpose(0, 1, 3, 2)
+    codes = codes.reshape(blocks, 64, channels).astype(np.int64)
+    out = np.zeros((blocks, 64, channels), np.int16)
+    out[:, 0, :] = pred
+    for i in range(1, 64):
+        pred, idx = _ima_step(pred, idx, codes[:, i - 1, :])
+        out[:, i, :] = pred
+    return out.reshape(blocks * 64, channels)
 
 
 def _selftest():

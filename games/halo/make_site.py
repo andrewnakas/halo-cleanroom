@@ -20,9 +20,11 @@ def main():
     ap.add_argument("out")
     ap.add_argument("--version", default="dev")
     a = ap.parse_args()
-    if os.path.isdir(a.out):
-        shutil.rmtree(a.out)
-    shutil.copytree(a.build, a.out, ignore=shutil.ignore_patterns("*.rsp", "clean"))
+    if os.path.isdir(a.out):      # emptied, not removed: a dev server may be serving it
+        for name in os.listdir(a.out):
+            path = os.path.join(a.out, name)
+            shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)
+    shutil.copytree(a.build, a.out, ignore=shutil.ignore_patterns("*.rsp", "clean"), dirs_exist_ok=True)
     clean = os.path.join(a.out, "clean")
     os.makedirs(clean)
     files = []
