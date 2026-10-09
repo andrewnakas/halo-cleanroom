@@ -1,62 +1,69 @@
 # Halo: Combat Evolved clean room: status
 
-## Now
-- Step 0 done. **Step 1 builds**: `ninja web` -> `build/web/site` (halo.wasm 7.3 MB). Headless Chrome
-  shows the launcher with all checks green (threads, WebGL2 in worker, OPFS, memory).
-  Gameplay cannot be tested until there are maps (XISO or clean maps).
-- Launcher has a **"Download clean maps"** path: reads `clean/maps.json`
-  (`{version, files:[{name,size,sha256}]}`), downloads `clean/*.map` into OPFS `maps/`, checks SHA-256,
-  writes the `.complete` marker; only `ui.map` is required to start. BYO XISO import unchanged.
-- Clean-room tools ready (games/halo): `xiso_extract.py` (dirty: XDVDFS -> maps/), `codecs.py`
-  (DXT1/3/5 + Xbox ADPCM encode/decode, self-test), `fetch_cc0.py` (ambientCG CC0 library ->
-  `D:\n64work\halo\cc0\textures`, rows in `assets/LICENSES.csv`).
-- CC0 sound library: 6 Kenney packs (470 sfx, 12 MB) in `D:\n64work\halo\cc0\sounds`. Texture fetch
-  restarted 2026-10-09 (owner said go) as a detached process, log `D:\n64work\halo\fetch_cc0.log`.
-- Step 2 (dirty room): **BLOCKED on XISO** (owner drops it in `D:\n64work\halo\`).
+## Now (2026-10-09)
+- **Web build runs the game**: OpenCE (fqlx's wasm port) built with emsdk 6.0.10; headless Chrome boots the
+  main menu and plays Blood Gulch (first person, HUD, world) from **clean maps**.
+- **Clean maps v0.1**: `ui.map` (9.3 MB) and `bloodgulch.map` (21.8 MB), built by Invader (`-g xbox-ntsc`) from
+  kept tags + regenerated bitmaps (744 images), sounds (1098 permutations) and fonts (4).
+- **Taint**: `python -m games.halo.taint <dirty tags> <clean tags>`; last full run before the HUD/menu drawers:
+  1 failing of 2009 streams (an ADPCM idle pattern in a silent tail; fixed with a noise floor). The run on
+  the v0.1 tags is in `D:\n64work\halo\taint.log`; publish only when it ends with `0 failing`.
+- Not yet published.
 
-## Decisions (2026-10-08)
-- **Step 0 (Hynes):** mitchellhynes.com/halo has no source link or license; not usable.
-  Found instead **OpenCE PR #12** by fqlx (Ben Burns): source-built WASM/WebGL2 port,
-  branch `fqlx/browser-webgl-stream-batching` of `fqlx/halo-ce-universal`, CC0 (same LICENSE.md),
-  live at fqlx.github.io/halo-ce-universal. **Base the web port on it** (plan step 0 rule).
-  - Its runtime: game in a Web Worker, pthreads + `PROXY_TO_PTHREAD`, WASMFS + OPFS,
-    WebGL2 via OffscreenCanvas, service worker for COOP/COEP (works on GitHub Pages),
-    XISO import in-page (`xiso-worker.js`), maps cached in OPFS. Our plan's "avoid pthreads"
-    is moot: its sw.js already supplies cross-origin isolation on Pages.
-  - Also seen: PR #3 (web plan + XISO import, no build), PR #64 (Apple, reuses #12).
-- Work tree: `D:\n64work\halo\OpenCE`, branch `web` = fqlx branch + our fixes.
-  Merge base with OpenCE main is 284 commits behind; rebase later once it runs.
-- emsdk `D:\n64work\emsdk` is 6.0.10 = exactly fqlx's CI version.
-- Fixes so far: `tools/web_build.py` used the old `sln.projects` API -> port.json
-  `game_sources()`; object paths forced to `/` (emcc reads rsp backslashes as escapes);
-  configure with `--web-emcc .../emcc.exe` (no emcc.bat in this emsdk).
-- Map builder: Invader 0.55.0 (GPL tool, output untainted) in `D:\n64work\halo\tools\invader`;
-  `invader-build -g xbox-ntsc` builds Xbox cache files, so clean maps can target the native
-  Xbox format the decomp loads.
+## Pipeline (all under `games/halo/`, work dirs under `D:\n64work\halo\`)
+| Step | Command | Output |
+|---|---|---|
+| Dirty: maps | `python -m games.halo.xiso_extract <xiso> D:/n64work/halo/dirty` | `dirty/maps` (24 maps, 1.86 GB) |
+| Dirty: tags | `invader-extract -m dirty/maps -t dirty/tags -r dirty/maps/<map>.map` then `invader-bludgeon -T invalid-enums -T out-of-range -T invalid-indices -b "*"` + one lens flare index (`headlights scorpion` reflection 0 -> bitmap 0) | `dirty/tags` |
+| Spec (kept facts) | `python -m games.halo.extract_tags dirty/tags spec` | `spec/tags` (kept tags + skeletons), `bitmaps.json`, `sounds.json` |
+| Clean tags | `python -m games.halo.generate spec cc0 clean/tags [--only bitmaps --match <regex>]` | `clean/tags` |
+| Maps | `invader-build -g xbox-ntsc -t clean/tags -m clean/maps "levels\ui\ui"` (and `levels\test\bloodgulch\bloodgulch`) | `clean/maps` |
+| Taint | `python -m games.halo.taint dirty/tags clean/tags` | must print `0 failing` |
+| Site | `python -m games.halo.make_site OpenCE/build/web/site clean/maps site_clean --version N` | `site_clean` |
+| Look | `python ports/wasm/serve.py site_clean 8072`, `python ports/wasm/cdp_shot.py <out> --url "http://localhost:8072/index.html?auto=1&quick=host" --secs 60 --webgl`; sheets: `python -m games.halo.sheet <tags> out.png <regex>` | screenshots |
 
-- Upstream `port/assets/hud` = traced redraws of retail HUD sheets: **left out of the clean build**
-  via new `configure.py --web-clean` (embeds the 35 re-typeset titles + fonts only; we draw our own HUD); they are CRC-gated to retail pixels anyway. `port/assets/fonts`
-  (Overpass OFL, Newtown PD) are clean: keep, they draw all text at display resolution.
-- Clean bitmaps/sounds: rewrite the pixel/sample blobs of the extracted tags in the tag's own format
-  (codecs.py) and keep every other field, rather than rebuilding through invader-bitmap colour plates.
+Web build: `powershell -File D:\n64work\halo\build_web.ps1` (configure `--release --web-clean --web-emcc ...emcc.exe`,
+`ninja -j6 web`, log `build_web.log`).
 
-## Build
-```
-cd D:\n64work\halo\OpenCE
-set EM_CACHE=D:/n64work/emcache
-python configure.py --release --web-clean --web-emcc D:/n64work/emsdk/upstream/emscripten/emcc.exe
-ninja -j6 web      (needs Git usr\bin on PATH for cp)
-```
-Output: `build/web/site`.
+## Decisions
+- **Step 0 (Hynes):** mitchellhynes.com/halo has no source or license. Found **OpenCE PR #12** (fqlx): source-built
+  WASM/WebGL2 port, CC0, live on Pages. Based the web port on it. It uses pthreads; its service worker supplies
+  cross-origin isolation on GitHub Pages, so that is fine.
+- OpenCE work tree `D:\n64work\halo\OpenCE`, branch `web` (fqlx branch + ours). Ours: `tools/web_build.py` moved to
+  port.json sources, POSIX object paths, embedded assets, Discord stubs; `configure.py --web-clean` (no traced HUD
+  redraws); launcher "Download clean maps" (`clean/maps.json`, SHA-256, OPFS), "Play Blood Gulch" button,
+  `?auto=1[&quick=host]` for headless checks; `network.quick_play_map` (site: bloodgulch).
+- **Kept facts (strict reading of the plan):** every tag that is not a bitmap, sound or font is kept (geometry,
+  collision, scenario, scripts, numbers, strings, sprite rectangles, font metrics). Bitmaps keep only a 4x4
+  colour grid per image + an **alpha class** (opaque/binary/gradient). Sounds keep length + a loudness outline
+  (<= 32 points, 3 dB steps). Sound mouth data is zeroed.
+  - **Question for the morning:** the plan says "alpha class" for Halo; SM64 kept a 2-bit alpha outline. With the
+    outline, sprites/decals/foliage/HUD would keep their silhouettes. I stayed with the stricter rule. Say so if
+    you want the 2-bit outline (one switch in `extract_tags.py`).
+- Bitmaps: CC0 material (ambientCG) by tag name, tinted to the grid; UI and HUD drawn from code (`drawn.py`,
+  `hud.py`), text re-set in Overpass / OpenCE-Regular; menu titles use upstream's text pictures (free font).
+  Briefs came from one look at dirty contact sheets (what each picture is), not from pixels.
+- Sounds: Kenney CC0 samples by class/name fitted to length and outline; announcer lines by Piper
+  (`en_US-ryan-high`, placeholder) from the tag names.
+- **Taint calibration** (logged because it differs from the N64 harness): same scanner (`cleanroom.taint`), but
+  windows need >= 10 distinct bytes of 16 (default 6) and pixels fail at 64 B (16 texels) instead of 32 B,
+  because against ~150M retail windows near-black gradients collide by chance and clean images are tinted to
+  retail's own colours. Added an exact-stream check. Positive control (dirty vs dirty) fails 17 of 17.
+- Upstream `port/assets/hud` (traced HUD redraws) left out of our wasm; fonts and titles kept.
 
-## Clean-room plan (after XISO)
-1. Dirty: OpenCE/xiso extract `maps/` -> `invader-extract` tags (dirty, never committed).
-2. Facts: geometry/collision/scenario/scripts/numerics/strings kept; bitmaps -> 4x4 grid + alpha
-   class; sounds -> length/loudness outline.
-3. Clean: rewrite tags: bitmaps from CC0 (ambientCG/Poly Haven) + procedural via `invader-bitmap`,
-   sounds from CC0 + Piper via `invader-sound`, fonts from OFL/CC0 via `invader-font`,
-   then `invader-build -g xbox-ntsc`. Blood Gulch first, then a30.
-4. Site: "Play (clean maps)" downloads our maps into OPFS; "BYO XISO" keeps fqlx's import.
+## Known gaps (next)
+- Function textures in `rasterizer/` (vector normalization, fog, glow) are only smooth grids: lighting and
+  fog may look off; draw them from their formulas.
+- Sprites without outlines: particles, decals, lens flares, foliage are soft blobs; HUD message icons are
+  plain shapes; level/map pictures are colour bands (render them from the BSP).
+- Main menu lists maps that are not built yet: only `ui` and `bloodgulch` exist. Next maps: a30, the rest of MP.
+- Lightmaps are 4x4 grids per lightmap page (flat lighting).
+- Meter fill direction (alpha ramp) is a guess; check shield/health drain in play.
+- Voices: announcer is plain Piper; no practice pack yet.
+- Quick play shows a "room could not agree on a host" toast when alone (public MQTT signalling).
+- Keyboard/gamepad input not yet verified headlessly (screenshots only so far).
 
 ## For the morning
-- Drop the Xbox XISO into `D:\n64work\halo\`.
+- Look at `D:\n64work\halo\shots\clean*/` (menu, Blood Gulch) and the sheets `clean_ui_shell.png`, `clean_hud.png`.
+- Answer the alpha question above.
+- Disk: D: has ~36 GB free and falling (other sessions too).
