@@ -10,10 +10,8 @@
 - Clean-room tools ready (games/halo): `xiso_extract.py` (dirty: XDVDFS -> maps/), `codecs.py`
   (DXT1/3/5 + Xbox ADPCM encode/decode, self-test), `fetch_cc0.py` (ambientCG CC0 library ->
   `D:\n64work\halo\cc0\textures`, rows in `assets/LICENSES.csv`).
-- CC0 sound library: 6 Kenney packs (470 sfx, 12 MB) in `D:
-64work\halo\cc0\sounds`. Texture fetch
-  restarted 2026-10-09 (owner said go) as a detached process, log `D:
-64work\haloetch_cc0.log`.
+- CC0 sound library: 6 Kenney packs (470 sfx, 12 MB) in `D:\n64work\halo\cc0\sounds`. Texture fetch
+  restarted 2026-10-09 (owner said go) as a detached process, log `D:\n64work\halo\fetch_cc0.log`.
 - Step 2 (dirty room): **BLOCKED on XISO** (owner drops it in `D:\n64work\halo\`).
 
 ## Decisions (2026-10-08)
