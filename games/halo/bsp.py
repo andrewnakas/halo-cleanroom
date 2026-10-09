@@ -302,8 +302,111 @@ def lightmap_pages(spec, bitmap_rel):
     return _cache[bitmap_rel]
 
 
+# ---------- pictures of a level (menu thumbnails): rendered from its own geometry
+
+def material_colours(spec, mats):
+    """Mean kept colour of each material's base map (shader -> bitmap -> 4x4 grid)."""
+    facts = _cache.get("facts") or json.load(open(os.path.join(spec, "bitmaps.json")))
+    _cache["facts"] = facts
+    tags = os.path.join(spec, "tags")
+    ext = {"senv": "shader_environment", "soso": "shader_model", "sotr": "shader_transparent_generic",
+           "schi": "shader_transparent_chicago", "scex": "shader_transparent_chicago_extended",
+           "swat": "shader_transparent_water", "sgla": "shader_transparent_glass", "smet": "shader_transparent_meter",
+           "spla": "shader_transparent_plasma"}
+    seen, out = {}, []
+    for m in mats:
+        key = (m.shader, m.group)
+        if key not in seen:
+            col = np.array([128.0, 128.0, 128.0])
+            path = os.path.join(tags, m.shader + "." + ext.get(m.group, "shader_environment"))
+            try:
+                root = hek.Tag(path).root
+                for field in ("base map", "map", "diffuse map"):
+                    if field in root and root[field]:
+                        f = facts.get(root[field].replace(B, "/") + ".bitmap")
+                        if f:
+                            col = np.asarray(f["images"][0]["faces"][0]["grid"], np.float64).mean(0)
+                            break
+            except (OSError, KeyError, AssertionError):
+                pass
+            seen[key] = col
+        out.append(seen[key])
+    return out
+
+
+def overview(spec, bsp_rel, w, h, yaw=0.6, pitch=0.85):
+    """A lit three-quarter view from above (back faces culled: ceilings open up) -> (h,w,3) 0..255."""
+    mats, _ = load(os.path.join(spec, "tags", bsp_rel))
+    mats = [m for m in mats if m.group in ("senv", "soso") and len(m.tris)]
+    if not mats:
+        return np.zeros((h, w, 3), np.float32)
+    lights, amb = sky_lights(spec, bsp_rel)
+    suns = [(d / np.linalg.norm(d), c) for d, c in lights if d[2] > 0.05 and c.max() > 0.05][:1]
+    shadow = ShadowMap(mats, suns[0][0], 1024) if suns else None
+    amb = amb if amb.max() > 0.01 else np.array([0.45, 0.45, 0.5])
+    colours = material_colours(spec, mats)
+    # camera basis: looking down along -view
+    view = np.array([math.cos(pitch) * math.cos(yaw), math.cos(pitch) * math.sin(yaw), math.sin(pitch)])
+    right = np.cross([0, 0, 1.0], view)
+    right /= np.linalg.norm(right)
+    up = np.cross(view, right)
+    allp = np.concatenate([m.pos for m in mats])
+    lo_hi = np.percentile(np.stack([allp @ right, allp @ up], 1), [1, 99], axis=0)
+    centre, span = lo_hi.mean(0), (lo_hi[1] - lo_hi[0]).max() * 1.08
+    ss = 2
+    W, H = w * ss, h * ss
+    scale = min(W, H) / max(span, 1e-3)
+    depth = np.full((H, W), -1e9, np.float32)
+    top = np.linspace(22, 6, H)[:, None, None] * np.array([1.0, 1.1, 1.4])[None, None]
+    img = np.repeat(top, W, 1).astype(np.float32)
+    for m, col in zip(mats, colours):
+        x = (m.pos @ right - centre[0]) * scale + W / 2
+        y = H / 2 - (m.pos @ up - centre[1]) * scale
+        z = m.pos @ view
+        n = m.normal / np.maximum(np.linalg.norm(m.normal, axis=1, keepdims=True), 1e-6)
+        if suns:
+            d, c = suns[0]
+            lit = amb[None] * (0.6 + 0.4 * n[:, 2:3]) + c[None] * (np.clip(n @ d, 0, 1) * shadow.visible(m.pos, n))[:, None]
+        else:
+            lit = np.repeat(0.45 + 0.4 * np.clip(n[:, 2:3], 0, 1) + 0.15 * np.abs(n[:, 0:1]), 3, 1)
+        shade = np.clip(lit, 0, 1.6) * col[None] * 1.15
+        q = np.stack([x, y], 1)
+        for tri in m.tris:
+            a_, b_, c_ = q[tri]
+            if (b_[0] - a_[0]) * (c_[1] - a_[1]) - (b_[1] - a_[1]) * (c_[0] - a_[0]) > 0:
+                continue                                    # faces away from the camera
+            hit = _raster(q[tri], W, H)
+            if hit is None:
+                continue
+            ys, xs, bc = hit
+            zz = (bc @ z[tri]).astype(np.float32)
+            near = zz > depth[ys, xs]
+            ys, xs = ys[near], xs[near]
+            depth[ys, xs] = zz[near]
+            img[ys, xs] = bc[near] @ shade[tri]
+    img = np.clip(img, 0, 255).reshape(h, ss, w, ss, 3).mean((1, 3))
+    return img
+
+
+def level_bsp(spec, level):
+    """The first structure BSP of a map name (bloodgulch, a10, ...) as a tag path, or None."""
+    tags = os.path.join(spec, "tags")
+    for folder in (f"levels/{level}", f"levels/test/{level}"):
+        p = os.path.join(tags, folder, level + ".scenario")
+        if os.path.exists(p):
+            sc = hek.Tag(p).root
+            for b in sc["structure bsps"]:
+                rel = b["structure bsp"].replace(B, "/") + ".scenario_structure_bsp"
+                if os.path.exists(os.path.join(tags, rel)):
+                    return rel
+    return None
+
+
 def main():
     spec, bsp_rel, out = sys.argv[1:4]
+    if "--view" in sys.argv:
+        Image.fromarray(overview(spec, bsp_rel, 512, 512).astype(np.uint8)).save(out)
+        return
     mats, info = load(os.path.join(spec, "tags", bsp_rel))
     pages = lightmap_pages(spec, info["lightmaps"] + ".bitmap")
     lights, amb = sky_lights(spec, bsp_rel)

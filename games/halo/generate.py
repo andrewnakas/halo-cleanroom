@@ -278,8 +278,9 @@ def fit(x, n, loop):
     return np.pad(x, (0, n - len(x)))
 
 
-def shape(x, outline):
-    """x follows the loudness outline (dBFS RMS per window)"""
+def shape(x, outline, limit=None):
+    """x follows the loudness outline (dBFS RMS per window); limit caps the gain (speech:
+    its own pauses must stay pauses)"""
     n, points = len(x), len(outline)
     edges = (np.arange(points + 1) * n) // points
     rng = np.random.default_rng(len(x))
@@ -289,6 +290,8 @@ def shape(x, outline):
         seg = x[edges[i]:max(edges[i + 1], edges[i] + 1)]
         rms = float(np.sqrt((seg ** 2).mean()))
         gains[i] = 10 ** (outline[i] / 20) / max(rms, 1e-5) if outline[i] > -60 else 0.0
+    if limit:
+        gains = np.clip(gains, 0.0, limit)
     centres = (edges[:-1] + edges[1:]) / 2
     g = np.interp(np.arange(n), centres, gains) if points > 1 else np.full(n, gains[0])
     # a noise floor of a few LSB: silence is then ours, not the codec's idle pattern
@@ -313,8 +316,11 @@ def murmur(n, rate, seed):
 
 
 def generate_sounds(spec, lib, out, match=None):
+    from . import dialog
     facts = json.load(open(os.path.join(spec, "sounds.json")))
     spoken = 0
+    text_path = os.path.join(spec, "dialog.json")
+    spoken_text = json.load(open(text_path, encoding="utf-8")) if os.path.exists(text_path) else {}
     for rel, s in sorted(facts.items()):
         if match and not re.search(match, rel):
             continue
@@ -343,11 +349,21 @@ def generate_sounds(spec, lib, out, match=None):
                     break
                 i = starts[perms[i]["range"]] + nxt
             total = sum(perms[i]["samples"] for i in chain)
+            said_line = False
             if speech:
                 text = re.sub(r"[_\d]+$", "", os.path.basename(rel)[:-6]).replace("_", " ")
                 src = lib.speak(text, rate)
                 spoken += 1
                 lib.used[rel] = "piper:en_US-ryan-high"
+            elif "/dialog/" in low and str(h) in spoken_text.get(rel, {}).get("lines", {}):
+                # a transcribed line (text is the kept fact) in a placeholder voice
+                who = spoken_text[rel]["who"]
+                line = spoken_text[rel]["lines"][str(h)]["text"]
+                said = dialog.speak(who, line, rate, max(total, 1))
+                src = dialog.place(said, max(total, 1), [v for i in chain for v in perms[i]["outline"]])
+                spoken += 1
+                said_line = True
+                lib.used[rel] = "piper:" + dialog.CAST.get(who, dialog.CAST["marine"])[0]
             elif "/dialog/" in low:
                 src = murmur(max(total, 1), rate, int(hashlib.md5((rel + perms[h]["name"]).encode()).hexdigest()[:8], 16))
                 lib.used[rel] = "murmur (synthesised)"
@@ -359,7 +375,7 @@ def generate_sounds(spec, lib, out, match=None):
             pos = 0
             for i in chain:
                 n = perms[i]["samples"]
-                seg = shape(x[pos:pos + n], perms[i]["outline"])
+                seg = shape(x[pos:pos + n], perms[i]["outline"], 3.0 if said_line else None)
                 pos += n
                 pcm = np.clip(seg * 32767, -32768, 32767).astype(np.int16)
                 pcm = np.repeat(pcm[:, None], s["channels"], 1)

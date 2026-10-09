@@ -187,16 +187,6 @@ MAP_NAMES = {"beaver_creek": "Beaver\nCreek", "bloodgulch": "Blood\nGulch", "boa
              "wizard": "Wizard"}
 
 
-def map_card(name, tag, sk, index, im, face, base):
-    w, h = im["w"], im["h"]
-    c = Canvas(w, h)
-    c.d.rectangle(c.s(0, 0, w, h), fill=(0, 0, 0, 255))
-    label = MAP_NAMES.get(os.path.basename(name)[:-7], os.path.basename(name)[:-7].title())
-    c.d.multiline_text((w * SS / 2, h * SS / 2), label, font=font(w * 0.17 * SS), fill=(255, 255, 255, 255),
-                       anchor="mm", align="center", spacing=w * 0.03 * SS)
-    return c.out()
-
-
 def button(name, tag, sk, index, im, face, base):
     w, h = im["w"], im["h"]
     letter = os.path.basename(name)[0].upper()
@@ -329,14 +319,52 @@ def swatch(name, tag, sk, index, im, face, base):
     return c.out()
 
 
+# the order of the menus' lists (the engine's own tables, ui_widget_event_handler_functions.c)
+MP_ORDER = ["beavercreek", "sidewinder", "damnation", "ratrace", "prisoner", "hangemhigh", "chillout", "carousel",
+            "boardingaction", "bloodgulch", "wizard", "putput", "longest"]
+SP_ORDER = ["a10", "a30", "a50", "b30", "b40", "c10", "c20", "c40", "d20", "d40"]
+CARD_LEVEL = {"beaver_creek": "beavercreek"}
+_views = {}
+
+
+def level_view(level, s):
+    """A level seen from above, rendered from its own kept geometry with our lighting
+    (games/halo/bsp.py) -> (s,s,3) float, or None when the level's tags are not in the spec."""
+    if (level, s) not in _views:
+        from . import bsp
+        rel = bsp.level_bsp(SPEC, level) if SPEC else None
+        _views[(level, s)] = bsp.overview(SPEC, rel, s, s) if rel else None
+    return _views[(level, s)]
+
+
 def picture(name, tag, sk, index, im, face, base):
-    """level and map pictures: the kept colours as soft bands in the square
-    on the left (the right of the sheet is black); renders replace these"""
+    """level and map pictures: a render of the level in the square on the left (the
+    right of the sheet is black); the kept colours as soft bands where there is no level"""
     w, h = im["w"], im["h"]
     out = np.zeros((h, w, 4), np.float32)
     out[..., 3] = 255
     s = min(w, h)
-    out[:, :s, :3] = base[:, :s]
+    order = MP_ORDER if "mp_map" in name else SP_ORDER
+    view = level_view(order[index], s) if index < len(order) else None
+    out[:, :s, :3] = base[:, :s] if view is None else view
+    return out
+
+
+def map_card(name, tag, sk, index, im, face, base):
+    """a multiplayer map's card: the level's render with its name set under it"""
+    w, h = im["w"], im["h"]
+    key = os.path.basename(name)[:-7]
+    view = level_view(CARD_LEVEL.get(key, key), min(w, h))
+    c = Canvas(w, h)
+    c.d.rectangle(c.s(0, 0, w, h), fill=(0, 0, 0, 255))
+    label = MAP_NAMES.get(key, key.title())
+    if view is None:
+        c.d.multiline_text((w * SS / 2, h * SS / 2), label, font=font(w * 0.17 * SS), fill=(255, 255, 255, 255),
+                           anchor="mm", align="center", spacing=w * 0.03 * SS)
+        return c.out()
+    out = np.zeros((h, w, 4), np.float32)
+    out[..., 3] = 255
+    out[:view.shape[0], :view.shape[1], :3] = view
     return out
 
 
