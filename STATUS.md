@@ -57,4 +57,6 @@ Output: `build/web/site`.
 4. Site: "Play (clean maps)" downloads our maps into OPFS; "BYO XISO" keeps fqlx's import.
 
 ## For the morning
+- The CC0 texture fetch (`python -m games.halo.fetch_cc0 D:/n64work/halo/cc0/textures`) was stopped by
+  Claude Code under low system memory; not restarted automatically. It resumes where it stopped.
 - Drop the Xbox XISO into `D:\n64work\halo\`.
