@@ -1,12 +1,17 @@
 """Dirty room: tags extracted from the retail maps -> spec (the kept facts).
 
-    python -m games.halo.extract_tags <dirty tags> <spec dir>
+    python -m games.halo.extract_tags <dirty tags> <spec dir> [--add] [--redo bitmaps]
+
+--add keeps the spec and extracts only tags it does not hold yet (new maps);
+--redo bitmaps recomputes the bitmap facts of every tag (a changed rule).
 
 Kept as they are: every tag that is not a bitmap, sound or font (geometry,
 collision, scenario, scripts, numeric tuning, strings).
 Coarse only:
-  bitmap  skeleton tag (pixels zeroed) + per image a 4x4 colour grid and an
-          alpha class (opaque / binary / gradient)
+  bitmap  skeleton tag (pixels zeroed) + per image a 4x4 colour grid, an
+          alpha class (opaque / binary / gradient) and, where the image is not
+          opaque, its alpha outline at 2 bits per texel (spec/alpha2/<tag>/<image>_<face>.bin,
+          the rule of the SM64 clean room; owner's decision 2026-10-09)
   sound   skeleton tag (samples and mouth data zeroed) + per permutation its
           length and a loudness outline (RMS in 3 dB steps, <= 32 points)
   font    skeleton tag (glyph pixels zeroed; metrics are numbers)
@@ -18,6 +23,8 @@ import shutil
 import sys
 
 import numpy as np
+
+from cleanroom.decomp.spec import alpha2
 
 from . import tags
 from .codecs import decode_xbox_adpcm
@@ -47,13 +54,18 @@ def alpha_class(rgba):
     return "binary" if mid < 0.02 else "gradient"
 
 
-def bitmap_facts(tag):
+def bitmap_facts(tag, outline_dir=None):
     images = []
-    for b in tag.bitmaps:
+    for i, b in enumerate(tag.bitmaps):
         faces = []
         for face in range(b.faces):
             rgba = b.read(0, face)
-            faces.append({"grid": grid4(rgba), "alpha": alpha_class(rgba)})
+            fact = {"grid": grid4(rgba), "alpha": alpha_class(rgba)}
+            if outline_dir and fact["alpha"] != "opaque" and rgba.ndim == 3:
+                os.makedirs(outline_dir, exist_ok=True)
+                open(os.path.join(outline_dir, f"{i}_{face}.bin"), "wb").write(bytes.fromhex(alpha2(rgba[..., 3])))
+                fact["alpha2"] = 1
+            faces.append(fact)
         images.append({"w": b.width, "h": b.height, "d": b.depth, "type": b.type, "format": b.format,
                        "mips": b.mipmaps, "faces": faces})
     return {"type": tag.type, "usage": tag.usage, "images": images,
@@ -76,19 +88,33 @@ def outline(pcm, rate):
 
 def main():
     src, spec = sys.argv[1], sys.argv[2]
+    add = "--add" in sys.argv
+    redo = sys.argv[sys.argv.index("--redo") + 1] if "--redo" in sys.argv else ""
     out_tags = os.path.join(spec, "tags")
-    if os.path.isdir(out_tags):
+    out_alpha = os.path.join(spec, "alpha2")
+    bitmaps, sounds, kept, fonts, new = {}, {}, 0, 0, 0
+    if add or redo:
+        bitmaps = json.load(open(os.path.join(spec, "bitmaps.json")))
+        sounds = json.load(open(os.path.join(spec, "sounds.json")))
+    elif os.path.isdir(out_tags):
         shutil.rmtree(out_tags)
-    bitmaps, sounds, kept, fonts = {}, {}, 0, 0
+        shutil.rmtree(out_alpha, ignore_errors=True)
     for root, _, files in os.walk(src):
         for name in files:
             p = os.path.join(root, name)
             rel = os.path.relpath(p, src).replace("\\", "/")
             dest = os.path.join(out_tags, rel)
+            have = (add or redo) and os.path.exists(dest)
+            if have and not (redo == "bitmaps" and name.endswith(".bitmap")):
+                kept += not name.endswith(ASSET)
+                fonts += name.endswith(".font")
+                continue
+            new += not have
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             if name.endswith(".bitmap"):
                 t = tags.BitmapTag(p)
-                bitmaps[rel] = bitmap_facts(t)
+                shutil.rmtree(os.path.join(out_alpha, rel), ignore_errors=True)
+                bitmaps[rel] = bitmap_facts(t, os.path.join(out_alpha, rel))
                 t.data[t.pixels:t.pixels + t.pixel_bytes] = bytes(t.pixel_bytes)
                 t.save(dest)
             elif name.endswith(".sound"):
@@ -115,7 +141,9 @@ def main():
     images = sum(len(b["images"]) for b in bitmaps.values())
     perms = sum(len(s["perms"]) for s in sounds.values())
     print(f"kept {kept} tags; {len(bitmaps)} bitmap tags ({images} images), "
-          f"{len(sounds)} sounds ({perms} permutations), {fonts} fonts -> {spec}")
+          f"{len(sounds)} sounds ({perms} permutations), {fonts} fonts; {new} new; "
+          f"{sum(f.get('alpha2', 0) for b in bitmaps.values() for im in b['images'] for f in im['faces'])} "
+          f"alpha outlines -> {spec}")
 
 
 if __name__ == "__main__":

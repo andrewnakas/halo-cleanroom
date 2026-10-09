@@ -99,11 +99,31 @@ def radial(w, h, rect=None, power=1.5, hard=False):
     return ((r < 0.85) * 255.0) if hard else np.clip(1 - r, 0, 1) ** power * 255.0
 
 
+SPEC = None      # the spec folder (set by generate_bitmaps): kept alpha outlines live under it
+
+
+def kept_alpha(rel, index, face, im):
+    """The kept 2-bit alpha outline of one image as (h,w) float 0..255, or None.
+    Punch-through images stay two-level; graded ones are smoothed between the four levels."""
+    facts = im["faces"][face]
+    if not facts.get("alpha2") or not SPEC:
+        return None
+    from cleanroom.decomp.gen import unpack_alpha2
+    from scipy.ndimage import gaussian_filter
+    w, h = im["w"], im["h"]
+    raw = open(os.path.join(SPEC, "alpha2", rel, f"{index}_{face}.bin"), "rb").read()
+    level = unpack_alpha2(raw.hex(), w, h) / 85.0
+    if facts["alpha"] == "binary":
+        return (level >= 2) * 255.0
+    a = np.asarray([0.0, 96.0, 168.0, 255.0], np.float32)[level.astype(np.int32)]
+    return np.clip(gaussian_filter(a, 0.9 if min(w, h) >= 16 else 0.4, mode="nearest"), 0, 255)
+
+
 def kind_of(rel, tag, im):
     name = rel.lower()
     if name.startswith("rasterizer/"):
         return "function"
-    if tag["usage"] == 4 or (name.startswith("levels/") and name.count("/") == 3 and im["format"] == "r5g6b5"):
+    if tag["usage"] == 4:
         return "lightmap"
     if im["type"] == "cube":
         return "cube"
@@ -129,13 +149,18 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
     special = drawn.draw(rel, tag, skeleton, index, im, face, base)
     if special is not None:
         return special
+    kept = kept_alpha(rel, index, face, im)
     if kind in ("function", "lightmap", "cube"):
         rgb = base
-        if facts["alpha"] != "opaque":
+        if kept is not None:
+            alpha = kept
+        elif facts["alpha"] != "opaque":
             alpha = base.mean(-1)
     elif kind == "bump":
         rgb = np.broadcast_to(np.asarray(facts["grid"], np.float32).mean(0), (h, w, 3)).copy()
-        if facts["alpha"] != "opaque":
+        if kept is not None:
+            alpha = kept
+        elif facts["alpha"] != "opaque":
             alpha[:] = 128
     else:
         cls = material_class(rel) if kind in ("texture", "detail") else "concrete"
@@ -144,7 +169,9 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
         d = lib.detail(src, w, h)
         strength = {"texture": 0.8, "detail": 1.0, "ui": 0.15, "effect": 0.3}[kind]
         rgb = base * (1 + strength * (d[..., None] - 1))
-        if facts["alpha"] != "opaque":
+        if kept is not None:
+            alpha = kept
+        elif facts["alpha"] != "opaque":
             sprites = [s for seq in skeleton.sequences for s in seq["sprites"] if s["bitmap"] == index]
             hard = facts["alpha"] == "binary"
             if sprites:
@@ -164,6 +191,8 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
 
 def generate_bitmaps(spec, lib, out, match=None):
     from . import drawn, functions
+    global SPEC
+    SPEC = spec
     drawn.CC0 = os.path.dirname(lib.root)
     facts = json.load(open(os.path.join(spec, "bitmaps.json")))
     n = 0
