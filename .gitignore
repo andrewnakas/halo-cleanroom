@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.z64
+*.n64
+*.v64
+*.zip
+baserom*
+*.iso
+*.xiso
+*.map
+tags/
+dirty/

@@ -1,0 +1,3 @@
+@echo off
+cd /d D:\n64work\halo-cleanroom
+"C:\Users\andre\.local\bin\claude.exe" --permission-mode auto "/loop Clean-room Halo: Combat Evolved as a true WebAssembly browser build, following the override section at the top of CLAUDE.md (it replaces the N64 parts) and docs/DECOMP_PLAYBOOK.md. Start with step 0 (Hynes source check) and step 1 (the OpenCE emscripten port); the XISO dirty-room step waits until the owner drops the disc image in D:\n64work\halo. Clean maps use CC0 textures and sounds. Publish to andrewnakas/halo-cleanroom plus GitHub Pages once playable and taint-clean, keep STATUS.md current, and respect the disk and memory budget."
