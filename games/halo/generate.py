@@ -274,7 +274,8 @@ def shape(x, outline):
         gains[i] = 10 ** (outline[i] / 20) / max(rms, 1e-5) if outline[i] > -60 else 0.0
     centres = (edges[:-1] + edges[1:]) / 2
     g = np.interp(np.arange(n), centres, gains) if points > 1 else np.full(n, gains[0])
-    return np.tanh(x * g * 1.2) / 1.2
+    # a noise floor of a few LSB: silence is then ours, not the codec's idle pattern
+    return np.tanh(x * g * 1.2) / 1.2 + rng.normal(0, 4e-4, n).astype(np.float32)
 
 
 def generate_sounds(spec, lib, out):

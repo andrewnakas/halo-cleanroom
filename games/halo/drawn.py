@@ -266,7 +266,7 @@ def difficulty(name, tag, sk, index, im, face, base):
 def logo(name, tag, sk, index, im, face, base):
     w, h = im["w"], im["h"]
     c = Canvas(w, h)
-    c.text((w / 2, h * 0.56), "H A L O", h * 0.74, (255, 255, 255, 255), name="OpenCE-Regular.ttf")
+    c.text((w / 2, h * 0.5), "H A L O", h * 0.3, (255, 255, 255, 255), name="OpenCE-Regular.ttf")
     a = np.asarray(c.img, np.float32)
     ramp = np.linspace(0, 1, a.shape[0])[:, None]
     shade = np.where(ramp < 0.5, 1.0 - 0.5 * ramp, 0.35 + 0.9 * (ramp - 0.5))      # chrome: light top, dark band, light foot
@@ -347,8 +347,9 @@ def black(name, tag, sk, index, im, face, base):
 
 
 def draw(rel, tag, skeleton, index, im, face, base):
+    from . import hud
     name = rel.lower()
-    for pattern, fn in DRAWERS:
+    for pattern, fn in hud.DRAWERS + DRAWERS:
         if re.search(pattern, name):
             out = fn(name, tag, skeleton, index, im, face, base)
             if out is not None:
