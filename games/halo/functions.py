@@ -85,11 +85,21 @@ def distance_attenuation(w, h, d, z):
     return np.stack([v, v, v, v], -1).astype(np.uint8)
 
 
+def ramp_table(name, tag, sk, index, im, face, base):
+    """fog density tables: a linear ramp along u; the corner fade: max(u, v)
+    (the kept grids of these tables are exactly those ramps' cell means)"""
+    w, h = im["w"], im["h"]
+    u, v = np.meshgrid((np.arange(w) + 0.5) / w, (np.arange(h) + 0.5) / h)
+    val = (np.maximum(u, v) if "corner" in name else u) * 255
+    return np.stack([val, val, val, val], -1).astype(np.float32)
+
+
 VOLUMES = {"rasterizer/distance attenuation.bitmap": distance_attenuation}
 
 DRAWERS = [
     (r"^rasterizer/vector normalization", vector_normalization),
     (r"^rasterizer/glow", glow),
+    (r"^rasterizer/(atmospheric fog density|planar fog density|linear corner fade)", ramp_table),
     (r"^rasterizer/video noise", video_noise),
     (r"^rasterizer/video mask", video_mask),
 ]
