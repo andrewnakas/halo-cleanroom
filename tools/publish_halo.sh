@@ -4,6 +4,16 @@
 # for the tags the staged maps were built from (STATUS.md records the run).
 set -e
 REPO=andrewnakas/halo-cleanroom
+# Refuse unless the scan log says 0 failing and is newer than every staged map and every
+# generated tag the maps could contain (scan log: TAINT_LOG, default taint_site.log).
+LOG=${TAINT_LOG:-/d/n64work/halo/taint_site.log}
+grep -q "; 0 failing" "$LOG" || { echo "publish: $LOG does not say 0 failing"; exit 1; }
+if [ -n "$(find /d/n64work/halo/pages -name .git -prune -o -type f \( -name '*.map' -o -name '*.part*' \) -newer "$LOG" -print | head -1)" ]; then
+  echo "publish: staged maps are newer than $LOG (scan again)"; exit 1
+fi
+if [ -n "$(find /d/n64work/halo/pages -name .git -prune -o -type f \( -iname '*DIRTY*' -o -iname '*.iso' \) -print | head -1)" ]; then
+  echo "publish: dirty files in the staged site"; exit 1
+fi
 cd "$(dirname "$0")/.."
 gh repo view $REPO >/dev/null 2>&1 || gh repo create $REPO --public \
   --description "Halo: Combat Evolved in the browser (WebAssembly) with clean-room maps: CC0 textures and sounds"
