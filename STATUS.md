@@ -1,38 +1,47 @@
 # Halo: Combat Evolved clean room: status
 
-## Now (2026-10-09 morning)
-- **Web build runs the game**: OpenCE (fqlx's wasm port) built with emsdk 6.0.10; headless Chrome boots the
-  main menu and plays from **clean maps** (first person, HUD, world; keyboard W walks).
-- **Clean maps v0.2**: the menu (`ui`) + **all 13 multiplayer maps** (274 MB), built by Invader from kept tags
-  + regenerated bitmaps (1050 images), sounds (1439 permutations), fonts (4). Blood Gulch, Beaver Creek and
-  Sidewinder were opened in the browser; the other ten are built, not yet looked at.
-- **Taint (v0.2 tags): `2691 generated streams scanned against 2691 retail streams; 491 with short coincidental
-  matches; 0 failing`.** Log `D:/n64work/halo/taint_v02.log`. The staged maps are those tags (no tag is newer).
-- **NOT PUBLISHED: BLOCKED on permission.** Creating the public repo was denied by Claude Code's auto-mode
-  classifier ("Create Public Surface"). Staged: site v0.2 in `D:/n64work/halo/pages` (git, branch gh-pages),
-  tools repo on `main`. **To publish, run `sh tools/publish_halo.sh`** (or tell the session to).
-  Already public (code only): github.com/andrewnakas/OpenCE branch `web`.
-- Launcher: "Download Blood Gulch (30 MB)" (menu + that map) and "All 13 maps (274 MB)"; "Play Blood Gulch"
-  button; bring-your-own-disc import unchanged.
-- Since v0.1: effect sprites drawn (flares, sparks, puffs, splats, stars, planets; `effects.py`), engine function
-  textures from formulas (`functions.py`), incremental generate (`--add`), taint index cached on disk
-  (`--index D:/n64work/halo/taint_index`, extended when new retail tags appear).
-- Memory: the machine ran out of commit twice overnight (other sessions); jobs here retry. Claude Code also
-  stopped two idle background shells (old XISO watcher, first texture fetch) for the same reason.
+## Now (2026-10-09, session 2)
+- **PUBLISHED v0.2**: https://andrewnakas.github.io/halo-cleanroom/ (menu + 13 multiplayer maps, taint 0 failing);
+  the live page was checked headless (boots to the main menu). Repo `andrewnakas/halo-cleanroom` (main = tools,
+  gh-pages = site). `tools/publish_halo.sh` now refuses unless `D:/n64work/halo/taint_site.log` says `0 failing`
+  and is newer than every staged map's build.
+- **BLOCKED on machine memory (17:50 UTC)**: free commit fell to ~0.5 GB; even `import numpy` fails. The holder is
+  **WindowsTerminal.exe (PID 25988): ~30 GB private memory and growing** (page file is on C: only, C: is full).
+  Restarting Windows Terminal (or a page file on D:) frees it. A watcher resumes the heavy jobs when free commit
+  is above 6 GB. Hit so far: the bitmap regeneration died halfway (MemoryError) and one headless a10 run lost its
+  GL context. **`clean/tags` bitmaps are therefore half old, half new: nothing may be staged from it until the
+  regeneration and a full taint scan finish.** The published site is not affected.
+- Owner decisions this session: **2-bit alpha outline** (SM64 rule) replaces the strict alpha class; campaign
+  dialogue may be **transcribed to text** and voiced with Piper; campaign maps go into **extra Pages repos**
+  (same origin); publish and keep pushing whatever passes taint.
 
-## Campaign (in progress, not staged)
-- `a10` (first level): tags extracted (+2151), spec re-extracted (1591 images, 7707 sound permutations in all),
-  clean tags generated (`--add`), clean `a10.map` built (150 MB) with the single-player globals overlay
-  (`-t clean/tags_sp -t clean/tags`). In the browser (`?auto=1&menu=1&level=a10`) it loads and shows the opening
-  cinematic; gameplay after the cinematic not reached yet (software rendering is slow; a retail-derived
-  rebuild is equally slow).
-- Dialogue is a wordless murmur placeholder (no text source; see the question below).
-- Site packaging splits maps over 96 MB into 48 MB parts (GitHub's 100 MB file limit); the launcher joins them.
-- **The taint scan of the a10 additions has NOT completed**: Claude Code stopped it under low system memory
-  (2026-10-09 ~08:15). Not restarted automatically. To run it:
-  `python -m games.halo.taint D:/n64work/halo/dirty/tags D:/n64work/halo/clean/tags --index D:/n64work/halo/taint_index`
-  Until it prints `0 failing`, `clean/maps/a10.map` must not be staged or published. The staged site (v0.2,
-  `D:/n64work/halo/pages`) does not contain a10.
+## Done this session
+- Engine/launcher (OpenCE `web`, commit f81d8f3d, built, checked headless with the real GPU at ~47 fps):
+  - Levels download **on demand**: a map missing from the browser is fetched by the page while the game waits
+    (no more "damaged disc" hang); the next campaign level is fetched ahead. Verified: `?level=a10` with only
+    ui + bloodgulch stored downloads a10 and starts it.
+  - Solo host no longer shows "could not agree on a host" (the room election is cancelled; alone and offline it
+    ends as host).
+  - Downloads stream piece by piece into OPFS with a hash per piece; maps are tracked per file (updates replace
+    only changed maps); manifest entries can carry a `base` URL (map repos).
+  - `?level=` starts under a player profile (saves, level progress); `game.test_script`, `?env=`, `?init=` hooks.
+  - Keyboard: **1 or V switch weapons** (Tab is the scoreboard on web). `?fps=1` shows audio gaps.
+- Tools: `extract_tags --add / --redo bitmaps` (598 alpha outlines kept in `spec/alpha2`), `generate` uses the
+  outline, `hek.py` reads **every** kept tag through Invader's definitions (5218 of 5218), `build_maps.py`
+  (extract / generate / build per map), `make_site.py --maps/--extra`, `cdp_shot.py` (no more lost shots, `--t0`).
+- Written, **not run yet** (memory): `bsp.py` = level geometry + our own lightmaps (sun shadow map + sky light
+  from the sky tag's numbers, carried on the kept 4x4 grid).
+
+## Next (in order, when memory allows)
+1. `python -m games.halo.generate spec cc0 clean/tags --only bitmaps` (all bitmaps with the outline), sheets.
+2. Lightmaps (`bsp.py`), HUD briefs (sensor 6/7, message icons, meter direction), effects, sky, level pictures.
+3. a10 gameplay check after the cinematic; then extract/generate/build a30 ... d40 (`build_maps.py`).
+4. Dialogue: `transcribe.py` (dirty room, text only) -> Piper lines; practice pack.
+5. Full taint scan -> v0.3 (fixes + a10 + a30), then the remaining levels in `halo-cleanroom-maps1/2`.
+
+## Not done / still open
+- Menu mouse pointer on web (menus are keyboard / pad only). Non-standard gamepad mappings. Per-level delete in
+  the launcher. Audio gaps: the counter is high while a level loads (mixer idle); real gaps in play not judged yet.
 
 ## Pipeline (all under `games/halo/`, work dirs under `D:\n64work\halo\`)
 | Step | Command | Output |
@@ -75,21 +84,11 @@ Web build: `powershell -File D:\n64work\halo\build_web.ps1` (configure `--releas
   retail's own colours. Added an exact-stream check. Positive control (dirty vs dirty) fails 17 of 17.
 - Upstream `port/assets/hud` (traced HUD redraws) left out of our wasm; fonts and titles kept.
 
-## Known gaps (next)
-- Fog density and camouflage tables in `rasterizer/` are still smooth grids (normalization cube, attenuation,
-  glow, video noise/mask are computed).
-- Effect sprites are generic shapes by name (not checked in play yet); foliage keeps no outline; HUD message
-  icons are plain shapes; a waypoint arrow with "15m" shows over the motion sensor; level/map pictures are colour bands (render them from the BSP).
-- Campaign maps are not built (the Campaign menu will fail). Next: a30. Dialogue needs a text source
-  (question: may the spoken lines be transcribed from the retail audio as text facts?).
-- Lightmaps are 4x4 grids per lightmap page (flat lighting).
-- Meter fill direction (alpha ramp) is a guess; check shield/health drain in play.
-- Voices: announcer is plain Piper; no practice pack yet.
-- Quick play shows a "room could not agree on a host" toast when alone (public MQTT signalling).
-- Gamepad input not verified (keyboard is).
+## Known gaps (asset side, from session 1; being worked through in "Next")
+- Effect sprites are generic shapes; HUD message icons are plain shapes; waypoint arrow + "15m" over the motion
+  sensor; level/map pictures are colour bands; lightmaps flat; camouflage / reference bump / P8 bumps smooth or
+  flat; sky galaxy and ring dull; announcer plain Piper; no practice pack; gamepad not verified.
 
 ## For the morning
-- Run `sh tools/publish_halo.sh` to publish v0.1 (repo + Pages), or allow the session to.
-- Look at `D:\n64work\halo\shots\clean*/` (menu, Blood Gulch) and the sheets `clean_ui_shell.png`, `clean_hud.png`.
-- Answer the alpha question above.
-- Disk: D: has ~36 GB free and falling (other sessions too).
+- **Restart Windows Terminal** (it holds ~30 GB) or tell the session memory is free; everything heavy waits on it.
+- Play https://andrewnakas.github.io/halo-cleanroom/ (v0.2).
