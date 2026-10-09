@@ -20,6 +20,20 @@
 - Memory: the machine ran out of commit twice overnight (other sessions); jobs here retry. Claude Code also
   stopped two idle background shells (old XISO watcher, first texture fetch) for the same reason.
 
+## Campaign (in progress, not staged)
+- `a10` (first level): tags extracted (+2151), spec re-extracted (1591 images, 7707 sound permutations in all),
+  clean tags generated (`--add`), clean `a10.map` built (150 MB) with the single-player globals overlay
+  (`-t clean/tags_sp -t clean/tags`). In the browser (`?auto=1&menu=1&level=a10`) it loads and shows the opening
+  cinematic; gameplay after the cinematic not reached yet (software rendering is slow; a retail-derived
+  rebuild is equally slow).
+- Dialogue is a wordless murmur placeholder (no text source; see the question below).
+- Site packaging splits maps over 96 MB into 48 MB parts (GitHub's 100 MB file limit); the launcher joins them.
+- **The taint scan of the a10 additions has NOT completed**: Claude Code stopped it under low system memory
+  (2026-10-09 ~08:15). Not restarted automatically. To run it:
+  `python -m games.halo.taint D:/n64work/halo/dirty/tags D:/n64work/halo/clean/tags --index D:/n64work/halo/taint_index`
+  Until it prints `0 failing`, `clean/maps/a10.map` must not be staged or published. The staged site (v0.2,
+  `D:/n64work/halo/pages`) does not contain a10.
+
 ## Pipeline (all under `games/halo/`, work dirs under `D:\n64work\halo\`)
 | Step | Command | Output |
 |---|---|---|
