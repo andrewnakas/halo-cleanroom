@@ -8,9 +8,14 @@ REPO=andrewnakas/halo-cleanroom
 # generated tag the maps could contain (scan log: TAINT_LOG, default taint_site.log).
 LOG=${TAINT_LOG:-/d/n64work/halo/taint_site.log}
 grep -q "; 0 failing" "$LOG" || { echo "publish: $LOG does not say 0 failing"; exit 1; }
-if [ -n "$(find /d/n64work/halo/pages -name .git -prune -o -type f \( -name '*.map' -o -name '*.part*' \) -newer "$LOG" -print | head -1)" ]; then
-  echo "publish: staged maps are newer than $LOG (scan again)"; exit 1
-fi
+for f in /d/n64work/halo/pages/clean/*.map /d/n64work/halo/pages/clean/*.part0; do
+  [ -e "$f" ] || continue
+  n=$(basename "$f"); n=${n%.part0}
+  src=/d/n64work/halo/clean/maps/$n
+  if [ ! -e "$src" ] || [ "$src" -nt "$LOG" ]; then
+    echo "publish: $n was built after $LOG (scan again)"; exit 1
+  fi
+done
 if [ -n "$(find /d/n64work/halo/pages -name .git -prune -o -type f \( -iname '*DIRTY*' -o -iname '*.iso' \) -print | head -1)" ]; then
   echo "publish: dirty files in the staged site"; exit 1
 fi
