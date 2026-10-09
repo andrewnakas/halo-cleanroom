@@ -85,12 +85,17 @@ def scan_font(dirty, clean):
 
 
 MATCH = None      # --match regex: scan only these tags (quick checks)
+SKIP = set()      # tag files already in the on-disk retail index
 
 
 def _find(tree, ext):
     import re
-    return [p for p in tags.find(tree, ext)
-            if not MATCH or re.search(MATCH, os.path.relpath(p, tree).replace(chr(92), "/"))]
+    out = []
+    for p in tags.find(tree, ext):
+        rel = os.path.relpath(p, tree).replace(chr(92), "/")
+        if rel not in SKIP and (not MATCH or re.search(MATCH, rel)):
+            out.append(p)
+    return out
 
 
 def streams(tree):
@@ -132,11 +137,13 @@ def main():
     digest = lambda data: hashlib.md5(data).hexdigest()
     cache = sys.argv[sys.argv.index("--index") + 1] if "--index" in sys.argv else None
     chunks, batch, n_retail, retail = [], [], 0, {}
+    global SKIP
     if cache and os.path.isfile(os.path.join(cache, "meta.json")):
         meta = json.load(open(os.path.join(cache, "meta.json")))
-        retail, n_retail = meta["streams"], len(meta["streams"])
+        retail = meta["streams"]
         chunks = [np.load(os.path.join(cache, f"chunk_{i}.npy"), mmap_mode="r") for i in range(meta["chunks"])]
-    else:
+        SKIP = {label.split("#")[0] for label in retail}     # index only the tags that are new
+    if True:
         keep_match, MATCH = MATCH, (None if cache else MATCH)
 
         def flush():
@@ -151,14 +158,14 @@ def main():
             retail[label] = digest(s)
             h, per = taint._hashes(s)
             batch.append(h[~per])
-            n_retail += 1
             if sum(len(x) for x in batch) > 8_000_000:
                 flush()
         if batch:
             flush()
         if cache:
             json.dump({"streams": retail, "chunks": len(chunks)}, open(os.path.join(cache, "meta.json"), "w"))
-        MATCH = keep_match
+        MATCH, SKIP = keep_match, set()
+    n_retail = len(retail)
 
     def scan(labelled):
         out = []

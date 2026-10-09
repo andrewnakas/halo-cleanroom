@@ -1,6 +1,6 @@
 """Clean room: spec (kept facts) + CC0 library -> a clean tag tree.
 
-    python -m games.halo.generate <spec dir> <cc0 dir> <clean tags dir> [--only bitmaps|sounds|fonts] [--match regex]
+    python -m games.halo.generate <spec dir> <cc0 dir> <clean tags dir> [--only bitmaps|sounds|fonts] [--match regex] [--add]
 
 Reads only the spec (games/halo/extract_tags.py) and the CC0 library. Never
 reads the dirty tree.
@@ -282,10 +282,12 @@ def shape(x, outline):
     return np.tanh(x * g * 1.2) / 1.2 + rng.normal(0, 4e-4, n).astype(np.float32)
 
 
-def generate_sounds(spec, lib, out):
+def generate_sounds(spec, lib, out, match=None):
     facts = json.load(open(os.path.join(spec, "sounds.json")))
     spoken = 0
     for rel, s in sorted(facts.items()):
+        if match and not re.search(match, rel):
+            continue
         t = tags.SoundTag(os.path.join(spec, "tags", rel))
         rate, low = s["rate"], rel.lower()
         loop = s["class"] in (23, 32, 33, 34, 39) or bool(re.search(r"_lp|loop|engine|hum|ambien", low))
@@ -330,7 +332,8 @@ def generate_sounds(spec, lib, out):
                 pcm = np.repeat(pcm[:, None], s["channels"], 1)
                 t.replace(t.permutations[i], encode_xbox_adpcm(pcm))
         t.save(os.path.join(out, rel))
-    json.dump(lib.used, open(os.path.join(out, "..", "sounds_used.json"), "w"), indent=0)
+    if not match:
+        json.dump(lib.used, open(os.path.join(out, "..", "sounds_used.json"), "w"), indent=0)
     print(f"sounds: {len(facts)} tags, {sum(len(s['perms']) for s in facts.values())} permutations, "
           f"{spoken} spoken lines, {len(set(lib.used.values()))} CC0 sources used")
 
@@ -358,15 +361,31 @@ def generate_fonts(spec, font_file, out):
 def main():
     spec, cc0, out = sys.argv[1:4]
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
-    if only is None:
+    match = sys.argv[sys.argv.index("--match") + 1] if "--match" in sys.argv else None
+    if "--add" in sys.argv:
+        # only the tags of the spec that the clean tree does not hold yet
+        added = []
+        for root, _, files in os.walk(os.path.join(spec, "tags")):
+            for f in files:
+                src = os.path.join(root, f)
+                rel = os.path.relpath(src, os.path.join(spec, "tags")).replace(chr(92), "/")
+                dest = os.path.join(out, rel)
+                if not os.path.isfile(dest):
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    shutil.copyfile(src, dest)
+                    added.append(rel)
+        print(f"added {len(added)} tags")
+        if not added:
+            return
+        match = "^(" + "|".join(re.escape(r) for r in added if r.endswith((".bitmap", ".sound"))) + ")$"
+    elif only is None:
         if os.path.isdir(out):
             shutil.rmtree(out)
         shutil.copytree(os.path.join(spec, "tags"), out)   # kept tags + skeletons, then every asset is filled
     if only in (None, "bitmaps"):
-        match = sys.argv[sys.argv.index("--match") + 1] if "--match" in sys.argv else None
         generate_bitmaps(spec, Library(cc0), out, match)
     if only in (None, "sounds"):
-        generate_sounds(spec, Sounds(cc0), out)
+        generate_sounds(spec, Sounds(cc0), out, match)
     if only in (None, "fonts"):
         generate_fonts(spec, os.path.join(cc0, "fonts", "Overpass-900.ttf"), out)
 
