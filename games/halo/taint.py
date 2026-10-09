@@ -146,7 +146,10 @@ def main():
     if True:
         keep_match, MATCH = MATCH, (None if cache else MATCH)
 
-        def flush():
+        indexed = dict(retail)       # the streams whose hashes are on disk (an interrupted run resumes there)
+        last_tag = [None]
+
+        def flush(upto=None):
             chunk = np.unique(np.concatenate(batch))
             if cache:
                 os.makedirs(cache, exist_ok=True)
@@ -154,15 +157,24 @@ def main():
                 chunk = np.load(os.path.join(cache, f"chunk_{len(chunks)}.npy"), mmap_mode="r")
             chunks.append(chunk)
             batch.clear()
+            if cache:
+                # only whole tags count as indexed (SKIP works per tag file)
+                done = {k: v for k, v in retail.items() if upto is None or k.split("#")[0] != upto}
+                indexed.update(done)
+                tmp = os.path.join(cache, "meta.json.tmp")
+                json.dump({"streams": indexed, "chunks": len(chunks)}, open(tmp, "w"))
+                os.replace(tmp, os.path.join(cache, "meta.json"))
         for label, s in streams(dirty):
+            tag = label.split("#")[0]
+            if tag != last_tag[0] and sum(len(x) for x in batch) > 8_000_000:
+                flush(upto=tag)
+            last_tag[0] = tag
             retail[label] = digest(s)
             h, per = taint._hashes(s)
             batch.append(h[~per])
-            if sum(len(x) for x in batch) > 8_000_000:
-                flush()
         if batch:
             flush()
-        if cache:
+        elif cache:
             json.dump({"streams": retail, "chunks": len(chunks)}, open(os.path.join(cache, "meta.json"), "w"))
         MATCH, SKIP = keep_match, set()
     n_retail = len(retail)

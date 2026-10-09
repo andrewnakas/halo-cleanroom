@@ -37,16 +37,24 @@
     round). Text pieces stay re-typeset; hairline pieces keep their drawn briefs.
   - Effects, decals, foliage, sky ring and clouds keep their silhouettes; stains are no longer flowers.
   - **Level pictures** (menu thumbnails, map cards) are 3/4 renders of each level's geometry with our lighting.
-- Campaign: **all ten levels extracted** into the dirty tree and the spec (9008 tags, 3751 images, 15834 sound
-  permutations). Dialogue: `dialog.py` (dirty room: speech -> text only; clean room: Piper cast per character).
+- **Campaign: all ten levels are extracted, generated (bitmaps), built and PLAY in the browser** (headless check per
+  level with the real GPU: load through `?level=`, on-demand download, cinematic skipped, 90 s of play, no error
+  lines; shots in `D:/n64work/halo/shots/smoke/<level>/`, sheets `campaign1.png`, `campaign2.png`). a10 runs the cryo
+  tutorial ("Use [stick] to look around"). Maps so far are silent in places: the campaign sounds are generated
+  after the transcription.
+- The "cinematic is stuck" / "slow motion" of session 1 was the test harness: a headless page turns `hidden` about
+  20 s in and the game then idles. `cdp_shot.py` now keeps the page visible; the game itself was fine.
+- Two repairs were needed on kept tags before Invader builds the levels (`build_maps.py repair`): lens-flare
+  bitmap indices past the bitmap count, and Windows-1252 bytes in three script sources.
+- Dialogue: `dialog.py` (dirty room: speech -> text only, small.en; clean room: Piper cast per character).
+  The level scripts' own debug prints ("cortana: [radio] roger that...") show as green text in this build: free
+  subtitles, and a second text source for the story lines.
 
 ## Next (in order)
-1. Running: bitmaps for the campaign tags (`generate --add --only bitmaps`), dialogue transcription (small.en; the
-   cached medium.en model is incomplete and its download stalls).
-2. `generate --only sounds` (all sounds, spoken lines from the text), `build_maps build campaign`.
-3. Full taint scan -> 0 failing -> stage v0.3 (main site: menu + 13 MP + a10; map repos for the rest).
-4. Browser check per level (loads, plays 60 s, `game_won` reaches the next level).
-5. Practice pack for recording; remaining polish (camouflage / bump tables, galaxy, darker level pictures).
+1. Running: dialogue transcription (resumes after memory dips), retail taint index for the campaign tags.
+2. `generate --only sounds` (all sounds, spoken lines from the text), rebuild every map.
+3. Full taint scan -> 0 failing -> stage v0.3 (main site: menu + 13 MP + a10; `halo-cleanroom-maps1/2` for the rest).
+4. `game_won` transition check a10 -> a30; practice pack; polish (camouflage table, galaxy, dark level pictures).
 
 ## Not done / still open
 - Menu mouse pointer on web (menus are keyboard / pad only). Non-standard gamepad mappings. Per-level delete in
