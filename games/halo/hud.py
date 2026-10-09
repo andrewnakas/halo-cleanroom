@@ -9,6 +9,59 @@ from .drawn import SS, Canvas, font
 W = (255, 255, 255, 255)
 
 
+def kept_shape(name, index, face, im, base):
+    """The image as its kept alpha outline in the kept coarse colour (white for the
+    grey HUD pieces the game tints), or None when no outline was kept."""
+    from .drawn import kept_alpha
+    a = kept_alpha(name, index, face, im)
+    if a is None:
+        return None
+    grid = np.asarray(im["faces"][face]["grid"], np.float32)
+    spread = (grid.max(1) - grid.min(1)).max()
+    out = np.empty((im["h"], im["w"], 4), np.float32)
+    if spread >= 40:
+        out[..., :3] = np.clip(base * (255.0 / max(base.max(), 1.0)), 0, 255)
+    elif im["format"] == "a8y8":
+        # brightness and alpha are separate here and only the alpha's outline is kept:
+        # bright where the shape is solid, dark in its faint fills (a white fill reads as a slab)
+        out[..., :3] = (255.0 * (a / 255.0) ** 1.5)[..., None]
+    else:
+        out[..., :3] = 255.0
+    out[..., 3] = a
+    return out
+
+
+def outlined(drawer, drawn_indices=()):
+    """Use the kept outline; the drawer remains for images without one and for those
+    that hold text (drawn_indices), which is re-typeset instead."""
+    def draw(name, tag, sk, index, im, face, base):
+        mine = drawer(name, tag, sk, index, im, face, base)
+        if index in drawn_indices:
+            return mine
+        shape = kept_shape(name, index, face, im, base)
+        if shape is None:
+            return mine
+        # hairlines fall under the outline's lowest level (alpha < 64) and vanish:
+        # where the outline holds far less ink than the drawn brief, the brief stands
+        if mine is not None and shape[..., 3].sum() < 0.35 * np.asarray(mine)[..., 3].sum():
+            return mine
+        return shape
+    return draw
+
+
+def ramp_direction(base, box):
+    """Which way a meter fills, from the kept coarse colour under its box: +1 when the
+    brightness rises to the right (the left fills first), -1 the other way; left first
+    when the grid does not say."""
+    l, t, r, b = box
+    luma = base[t:b, l:r].mean(-1)
+    if luma.shape[1] < 12:
+        return 1
+    third = max(luma.shape[1] // 3, 1)
+    left, right = float(luma[:, :third].mean()), float(luma[:, -third:].mean())
+    return -1 if left - right > 20 else 1
+
+
 def rects(sk, index, im):
     """[(sequence, sprite number, (l, t, r, b) in texels)] of one image"""
     out = []
@@ -36,22 +89,34 @@ def ticks(c, box, n, rows=1, lean=0.5, duty=0.55):
             slant_bar(c, (x, t + row * rh + 0.5, x + step * duty + rh * lean, t + (row + 1) * rh - 0.5), lean)
 
 
-def as_meter(c, boxes):
-    """meter texture: white where the shape is; alpha ramps left to right in
-    each box (the game draws the texels whose alpha is under the meter's value)"""
+def as_meter(c, boxes, base, shape=None):
+    """Meter texture. The game (rasterizer_xbox_dynavobgeom.c, the meter combiner) draws a
+    texel when the meter's value is above its brightness and kills texels of zero alpha:
+    brightness is a ramp across each box (the order of filling), alpha is the shape."""
     a = c.out()
-    shape = a[..., 3] / 255.0
-    ramp = np.zeros(shape.shape, np.float32)
+    drawn = a[..., 3]
+    alpha = drawn if shape is None else shape
+    ramp = np.full(alpha.shape, 250.0, np.float32)
     for l, t, r, b in boxes:
         l, t, r, b = int(l), int(t), int(np.ceil(r)), int(np.ceil(b))
-        ramp[t:b, l:r] = np.linspace(8, 255, max(r - l, 1))[None, :]
+        ramp[t:b, l:r] = np.linspace(6, 250, max(r - l, 1))[None, ::ramp_direction(base, (l, t, r, b))]
     out = np.zeros(a.shape, np.float32)
-    out[..., :3] = 255 * shape[..., None]
-    out[..., 3] = ramp * (shape > 0.3)
+    out[..., :3] = ramp[..., None]
+    out[..., 3] = alpha
     return out
 
 
+def raw_level(name, index, face, im):
+    """the kept alpha levels 0..3 of an image (h,w)"""
+    import os
+    from cleanroom.decomp.gen import unpack_alpha2
+    from . import drawn
+    raw = open(os.path.join(drawn.SPEC, "alpha2", name, f"{index}_{face}.bin"), "rb").read()
+    return (unpack_alpha2(raw.hex(), im["w"], im["h"]) / 85.0).astype(np.int32)
+
+
 def hud_meters(name, tag, sk, index, im, face, base):
+    from .drawn import kept_alpha
     c = Canvas(im["w"], im["h"])
     boxes = []
     for si, k, (l, t, r, b) in rects(sk, index, im):
@@ -64,7 +129,7 @@ def hud_meters(name, tag, sk, index, im, face, base):
                 slant_bar(c, box, 0.35)
         else:
             ticks(c, box, max(4, int((r - l) / 6)), 2 if b - t > 20 else 1)
-    return as_meter(c, boxes)
+    return as_meter(c, boxes, base, kept_alpha(name, index, face, im))
 
 
 def hud_ammo_alphas(name, tag, sk, index, im, face, base):
@@ -328,13 +393,14 @@ def scope_mask(name, tag, sk, index, im, face, base):
 
 DRAWERS = [
     (r"^ui/hud/.*(ammo_meters|unit_meters)", hud_meters),
-    (r"^ui/hud/.*ammo_alphas", hud_ammo_alphas),
-    (r"^ui/hud/.*(ammo_outlines|weapon_backgrounds)", hud_outlines),
-    (r"^ui/hud/.*unit_backgrounds", hud_unit_backgrounds),
+    (r"^ui/hud/.*ammo_alphas", outlined(hud_ammo_alphas)),
+    (r"^ui/hud/.*(ammo_outlines|weapon_backgrounds)", outlined(hud_outlines)),
+    (r"^ui/hud/.*unit_backgrounds", outlined(hud_unit_backgrounds, drawn_indices=tuple(VEHICLES))),
     (r"^ui/hud/.*counter_numbers", hud_numbers),
     (r"^ui/hud/.*reticle_warnings", hud_warnings),
-    (r"^ui/hud/.*hud_reticles\.bitmap", hud_reticles),
-    (r"^ui/hud/.*scope_mask", scope_mask),
-    (r"^ui/hud/.*(msg_icons|damage_arrows|waypoints|ammo_type_icons)", hud_sprites),
-    (r"^ui/hud/", hud_single),
+    (r"^ui/hud/.*hud_reticles\.bitmap", outlined(hud_reticles)),
+    (r"^ui/hud/.*scope_mask", outlined(scope_mask)),
+    (r"^ui/hud/.*(msg_icons|damage_arrows|waypoints|ammo_type_icons)", outlined(hud_sprites)),
+    (r"^ui/hud/.*(caption|reticles_scope)", hud_single),
+    (r"^ui/hud/", outlined(hud_single)),
 ]

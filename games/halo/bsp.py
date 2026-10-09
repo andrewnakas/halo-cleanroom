@@ -38,7 +38,7 @@ def load(path):
             raw = bytes(m["uncompressed vertices"])
             if not n or len(raw) < n * 56:
                 continue
-            v = np.frombuffer(raw, ">f4", n * 14).reshape(n, 14)
+            v = np.frombuffer(raw, "<f4", n * 14).reshape(n, 14)
             mat = Material()
             mat.lightmap = -1 if page == 0xFFFF else page
             mat.shader = m["shader"].replace(B, "/")
@@ -48,7 +48,7 @@ def load(path):
             mat.uv = v[:, 12:14].astype(np.float32)
             mat.lm_uv = None
             if ln and len(raw) >= n * 56 + ln * 20:
-                lv = np.frombuffer(raw, ">f4", ln * 5, n * 56).reshape(ln, 5)
+                lv = np.frombuffer(raw, "<f4", ln * 5, n * 56).reshape(ln, 5)
                 mat.lm_uv = lv[:, 3:5].astype(np.float32)
             first, count = m["surfaces"], m["surface count"]
             mat.tris = surfaces[first:first + count].astype(np.int64)
@@ -205,14 +205,38 @@ def bake(mats, lights, ambient, sizes):
     return out
 
 
-def tint(light, cover, grid):
+def cell_cover(cover):
+    h, w = cover.shape
+    ys = (np.arange(5) * h) // 4
+    xs = (np.arange(5) * w) // 4
+    return np.array([[cover[ys[j]:ys[j + 1], xs[i]:xs[i + 1]].mean() for i in range(4)] for j in range(4)], np.float32)
+
+
+def filler_colour(pages):
+    """The colour of lightmap texels no surface uses, from grid cells our charts leave empty
+    (pages: [(grid, cover)]); None when every cell is in use."""
+    empty = [np.asarray(grid, np.float32).reshape(4, 4, 3)[cell_cover(cover) < 0.002] for grid, cover in pages]
+    empty = np.concatenate(empty) if empty else np.zeros((0, 3))
+    return np.median(empty, 0) if len(empty) else None
+
+
+def tint(light, cover, grid, filler=None, level=None):
     """Our lighting carried on the kept 4x4 colour grid of the page -> (h,w,3) float 0..255.
-    Each grid cell keeps its kept mean colour; inside it, brightness follows our lighting."""
+    A cell's kept colour mixes the lit charts with the page's unused texels, so the charts'
+    share is solved from our own coverage; inside a cell, brightness follows our lighting."""
     h, w = cover.shape
     g = np.asarray(grid, np.float32).reshape(4, 4, 3)
-    base = np.asarray(Image.fromarray(g.astype(np.uint8)).resize((w, h), Image.BICUBIC), np.float32)
     if not cover.any():
-        return base
+        return np.asarray(Image.fromarray(g.astype(np.uint8)).resize((w, h), Image.BICUBIC), np.float32)
+    if filler is not None:
+        # (the charts carry a rim of spread texels: count it as lit)
+        cov = cell_cover(ndimage.binary_dilation(cover, iterations=2))[..., None]
+        page = np.clip((g.sum((0, 1)) - (1 - cov).sum((0, 1)) * filler) / max(float(cov.sum()), 1e-3), 0, 255)
+        if cov.sum() < 1.5 and level is not None:      # a page that is nearly empty: the level's lit colour
+            page = level
+        solved = np.clip((g - (1 - cov) * filler) / np.maximum(cov, 1e-3), 0, 255)
+        trust = np.clip((cov - 0.5) / 0.4, 0, 1)        # mostly-lit cells keep their own colour
+        g = trust * solved + (1 - trust) * page
     luma = light @ np.array([0.3, 0.59, 0.11], np.float32)
     ys = (np.arange(5) * h) // 4
     xs = (np.arange(5) * w) // 4
@@ -221,11 +245,13 @@ def tint(light, cover, grid):
     for j in range(4):
         for i in range(4):
             c = cover[ys[j]:ys[j + 1], xs[i]:xs[i + 1]]
-            cell[j, i] = luma[ys[j]:ys[j + 1], xs[i]:xs[i + 1]][c].mean() if c.any() else whole
-    mean = np.asarray(Image.fromarray(cell).resize((w, h), Image.BICUBIC), np.float32)
-    ratio = np.clip(luma / np.maximum(mean, 1e-3), 0.3, 2.5)
+            cell[j, i] = luma[ys[j]:ys[j + 1], xs[i]:xs[i + 1]][c].mean() if c.mean() > 0.05 else whole
+    # cells as smooth fields (bilinear between cell centres)
+    base = np.stack([np.asarray(Image.fromarray(g[..., k]).resize((w, h), Image.BILINEAR), np.float32) for k in range(3)], -1)
+    mean = np.asarray(Image.fromarray(cell).resize((w, h), Image.BILINEAR), np.float32)
+    ratio = np.clip(luma / np.maximum(mean, 1e-3), 0.25, 2.5)
     hue = light / np.maximum(luma[..., None], 1e-3)
-    hue = 0.75 + 0.25 * np.clip(hue, 0.5, 1.6)           # a little of the light's own colour
+    hue = 0.8 + 0.2 * np.clip(hue, 0.5, 1.6)           # a little of the light's own colour
     return np.clip(base * ratio[..., None] * hue, 0, 255)
 
 
@@ -259,9 +285,19 @@ def lightmap_pages(spec, bitmap_rel):
         lights, amb = sky_lights(spec, bsp_rel)
         sizes = {i: (im["w"], im["h"]) for i, im in enumerate(facts["images"])}
         baked = bake(mats, lights, amb, sizes)
-        for key in [k for k in _cache if k not in ("index", "facts")]:
+        for key in [k for k in _cache if k not in ("index", "facts", "filler")]:
             del _cache[key]              # one level's pages at a time
-        pages = {i: tint(light, cover, facts["images"][i]["faces"][0]["grid"]) for i, (light, cover) in baked.items()}
+        grids = {i: facts["images"][i]["faces"][0]["grid"] for i in baked}
+        filler = filler_colour([(grids[i], cover) for i, (light, cover) in baked.items()])
+        level = None
+        if filler is not None:
+            covs = {i: cell_cover(ndimage.binary_dilation(cover, iterations=2))[..., None] for i, (_, cover) in baked.items()}
+            total = sum(float(c.sum()) for c in covs.values())
+            lit = sum(np.asarray(grids[i], np.float32).reshape(4, 4, 3).sum((0, 1)) - (1 - covs[i]).sum((0, 1)) * filler
+                      for i in baked)
+            level = np.clip(lit / max(total, 1e-3), 0, 255)
+        pages = {i: tint(light, cover, grids[i], filler, level) for i, (light, cover) in baked.items()}
+        _cache["filler"] = filler
         _cache[bitmap_rel] = pages
     return _cache[bitmap_rel]
 
@@ -273,6 +309,7 @@ def main():
     lights, amb = sky_lights(spec, bsp_rel)
     print(f"{bsp_rel}: {len(mats)} materials, {sum(len(m.tris) for m in mats)} triangles, "
           f"{len(pages or {})} lightmap pages, {len(lights)} sky lights, ambient {np.round(amb, 2)}")
+    print("unused-texel colour:", None if _cache.get("filler") is None else np.round(_cache["filler"]))
     if pages:
         cell = 192
         keys = sorted(pages)[:24]

@@ -99,26 +99,6 @@ def radial(w, h, rect=None, power=1.5, hard=False):
     return ((r < 0.85) * 255.0) if hard else np.clip(1 - r, 0, 1) ** power * 255.0
 
 
-SPEC = None      # the spec folder (set by generate_bitmaps): kept alpha outlines live under it
-
-
-def kept_alpha(rel, index, face, im):
-    """The kept 2-bit alpha outline of one image as (h,w) float 0..255, or None.
-    Punch-through images stay two-level; graded ones are smoothed between the four levels."""
-    facts = im["faces"][face]
-    if not facts.get("alpha2") or not SPEC:
-        return None
-    from cleanroom.decomp.gen import unpack_alpha2
-    from scipy.ndimage import gaussian_filter
-    w, h = im["w"], im["h"]
-    raw = open(os.path.join(SPEC, "alpha2", rel, f"{index}_{face}.bin"), "rb").read()
-    level = unpack_alpha2(raw.hex(), w, h) / 85.0
-    if facts["alpha"] == "binary":
-        return (level >= 2) * 255.0
-    a = np.asarray([0.0, 96.0, 168.0, 255.0], np.float32)[level.astype(np.int32)]
-    return np.clip(gaussian_filter(a, 0.9 if min(w, h) >= 16 else 0.4, mode="nearest"), 0, 255)
-
-
 def kind_of(rel, tag, im):
     name = rel.lower()
     if name.startswith("rasterizer/"):
@@ -149,7 +129,12 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
     special = drawn.draw(rel, tag, skeleton, index, im, face, base)
     if special is not None:
         return special
-    kept = kept_alpha(rel, index, face, im)
+    kept = drawn.kept_alpha(rel, index, face, im)
+    if kind == "lightmap" and drawn.SPEC:
+        from . import bsp
+        pages = bsp.lightmap_pages(drawn.SPEC, rel)      # our own lighting from the level's geometry
+        if pages and index in pages:
+            return np.concatenate([pages[index], alpha[..., None]], -1)
     if kind in ("function", "lightmap", "cube"):
         rgb = base
         if kept is not None:
@@ -191,8 +176,7 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
 
 def generate_bitmaps(spec, lib, out, match=None):
     from . import drawn, functions
-    global SPEC
-    SPEC = spec
+    drawn.SPEC = spec
     drawn.CC0 = os.path.dirname(lib.root)
     facts = json.load(open(os.path.join(spec, "bitmaps.json")))
     n = 0
