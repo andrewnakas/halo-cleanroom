@@ -128,6 +128,10 @@ def main():
         send("Runtime.enable")
         send("Log.enable")
         send("Page.enable")
+        # a headless page turns "hidden" after some seconds, and pages pause or slow their
+        # drawing when hidden: keep it focused and visible
+        send("Emulation.setFocusEmulationEnabled", enabled=True)
+        send("Page.setWebLifecycleState", state="active")
         send("Page.navigate", url=a.url)
         todo = [(s, "shot", None) for s in secs] + [(t, k, c) for t, k, c in events]
         todo.sort(key=lambda x: x[0])
