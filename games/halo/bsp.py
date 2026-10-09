@@ -373,7 +373,7 @@ def overview(spec, bsp_rel, w, h, yaw=0.6, pitch=0.85):
         q = np.stack([x, y], 1)
         for tri in m.tris:
             a_, b_, c_ = q[tri]
-            if (b_[0] - a_[0]) * (c_[1] - a_[1]) - (b_[1] - a_[1]) * (c_[0] - a_[0]) > 0:
+            if (b_[0] - a_[0]) * (c_[1] - a_[1]) - (b_[1] - a_[1]) * (c_[0] - a_[0]) < 0:
                 continue                                    # faces away from the camera
             hit = _raster(q[tri], W, H)
             if hit is None:
@@ -384,6 +384,11 @@ def overview(spec, bsp_rel, w, h, yaw=0.6, pitch=0.85):
             ys, xs = ys[near], xs[near]
             depth[ys, xs] = zz[near]
             img[ys, xs] = bc[near] @ shade[tri]
+    drawn = depth > -1e8
+    if drawn.any():                     # expose: the bright parts of the level near white
+        peak = np.percentile(img[drawn].max(1), 97)
+        img[drawn] *= min(4.0, 225.0 / max(peak, 1.0))
+        img[drawn] = 255.0 * (np.clip(img[drawn], 0, 255) / 255.0) ** 0.75      # lift the shaded sides
     img = np.clip(img, 0, 255).reshape(h, ss, w, ss, 3).mean((1, 3))
     return img
 

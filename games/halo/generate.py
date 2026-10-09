@@ -413,7 +413,9 @@ def main():
     match = sys.argv[sys.argv.index("--match") + 1] if "--match" in sys.argv else None
     if "--add" in sys.argv:
         # only the tags of the spec that the clean tree does not hold yet
-        added = []
+        # (an interrupted run leaves its list in pending_add.json: those tags are done again)
+        pending = os.path.join(out, "..", "pending_add.json")
+        added = json.load(open(pending)) if os.path.exists(pending) else []
         for root, _, files in os.walk(os.path.join(spec, "tags")):
             for f in files:
                 src = os.path.join(root, f)
@@ -426,6 +428,7 @@ def main():
         print(f"added {len(added)} tags")
         if not added:
             return
+        json.dump(added, open(pending, "w"))
         match = "^(" + "|".join(re.escape(r) for r in added if r.endswith((".bitmap", ".sound"))) + ")$"
     elif only is None:
         if os.path.isdir(out):
@@ -437,6 +440,8 @@ def main():
         generate_sounds(spec, Sounds(cc0), out, match)
     if only in (None, "fonts"):
         generate_fonts(spec, os.path.join(cc0, "fonts", "Overpass-900.ttf"), out)
+    if "--add" in sys.argv and only is None:
+        os.remove(pending)
 
 
 if __name__ == "__main__":

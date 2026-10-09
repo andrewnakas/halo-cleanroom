@@ -47,7 +47,7 @@ def speaker(rel):
         return "announcer"
     if ALIEN.search(low):
         return ""
-    for key, who in (("cortana", "cortana"), ("keyes", "keyes"), ("chief", "chief"), ("johnson", "sarge"),
+    for key, who in (("cortana", "cortana"), ("keyes", "keyes"), ("captain", "keyes"), ("chief", "chief"), ("johnson", "sarge"),
                      ("sarge", "sarge"), ("sargeant", "sarge"), ("pilot", "pilot"), ("foehammer", "pilot"),
                      ("monitor", "monitor"), ("spark", "monitor"), ("grunt", "grunt"), ("crewman", "crewman"),
                      ("crew", "crewman"), ("bisenti", "marine2"), ("mendoza", "marine3"), ("jenkins", "marine2"),
@@ -103,7 +103,9 @@ def transcribe(dirty, spec, model="medium.en", match=None):
         entry = {"who": who, "lines": {}}
         if who and who != "announcer":
             if whisper is None:
-                whisper = WhisperModel(model, device="cpu", compute_type="int8", cpu_threads=4)
+                # (the model cache goes on D:; C: has no room for it)
+                whisper = WhisperModel(model, device="cpu", compute_type="int8", cpu_threads=4,
+                                       download_root=os.environ.get("WHISPER_ROOT", "D:/n64work/whisper_models"))
             t = tags.SoundTag(os.path.join(dirty, rel))
             for chain in chains(facts[rel]["perms"]):
                 pcm = [decode_xbox_adpcm(t.samples(t.permutations[i]), t.channels) for i in chain
