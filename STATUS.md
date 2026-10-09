@@ -5,10 +5,13 @@
   main menu and plays Blood Gulch (first person, HUD, world) from **clean maps**.
 - **Clean maps v0.1**: `ui.map` (9.3 MB) and `bloodgulch.map` (21.8 MB), built by Invader (`-g xbox-ntsc`) from
   kept tags + regenerated bitmaps (744 images), sounds (1098 permutations) and fonts (4).
-- **Taint**: `python -m games.halo.taint <dirty tags> <clean tags>`; last full run before the HUD/menu drawers:
-  1 failing of 2009 streams (an ADPCM idle pattern in a silent tail; fixed with a noise floor). The run on
-  the v0.1 tags is in `D:\n64work\halo\taint.log`; publish only when it ends with `0 failing`.
-- Not yet published.
+- **Taint (v0.1 tags, 2026-10-09 05:0x): `2009 generated streams scanned against 2009 retail streams; 364 with
+  short coincidental matches; 0 failing`.** Log: `D:/n64work/halo/taint.log`. The staged maps are those tags.
+- Keyboard input checked headlessly (W walks forward); pregame lobby and HUD readable.
+- **NOT PUBLISHED: BLOCKED on permission.** Creating the public repo was denied by Claude Code's auto-mode
+  classifier ("Create Public Surface"). Everything is staged: site in `D:/n64work/halo/pages` (git, branch
+  gh-pages, 36 MB), tools repo committed on `main`. **To publish, run `sh tools/publish_halo.sh`** (or tell
+  the session to). The OpenCE source branch is already public: github.com/andrewnakas/OpenCE branch `web`.
 
 ## Pipeline (all under `games/halo/`, work dirs under `D:\n64work\halo\`)
 | Step | Command | Output |
@@ -61,9 +64,10 @@ Web build: `powershell -File D:\n64work\halo\build_web.ps1` (configure `--releas
 - Meter fill direction (alpha ramp) is a guess; check shield/health drain in play.
 - Voices: announcer is plain Piper; no practice pack yet.
 - Quick play shows a "room could not agree on a host" toast when alone (public MQTT signalling).
-- Keyboard/gamepad input not yet verified headlessly (screenshots only so far).
+- Gamepad input not verified (keyboard is).
 
 ## For the morning
+- Run `sh tools/publish_halo.sh` to publish v0.1 (repo + Pages), or allow the session to.
 - Look at `D:\n64work\halo\shots\clean*/` (menu, Blood Gulch) and the sheets `clean_ui_shell.png`, `clean_hud.png`.
 - Answer the alpha question above.
 - Disk: D: has ~36 GB free and falling (other sessions too).
