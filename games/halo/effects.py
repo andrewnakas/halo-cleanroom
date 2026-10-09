@@ -41,9 +41,13 @@ def shape(kind, w, h, rng):
         n = noise(w, h, 5, rng) * 0.6 + noise(w, h, 11, rng) * 0.4
         return np.clip((1 - r * (0.9 + 0.5 * n)) * 1.6, 0, 1) * (0.55 + 0.45 * n)
     if kind == "splat":
-        ang = np.arctan2(v, u)
-        lobes = 0.55 + 0.3 * np.sin(ang * rng.integers(3, 7) + rng.random() * 6) + 0.2 * noise(w, h, 7, rng)
-        return np.clip((lobes - r) * 6, 0, 1)
+        # an irregular stain: a noisy blob with a few thrown droplets, soft-edged
+        n = noise(w, h, 4, rng) * 0.55 + noise(w, h, 9, rng) * 0.3 + noise(w, h, 19, rng) * 0.15
+        body = np.clip((0.62 + 0.5 * (n - 0.5) - r) * 5, 0, 1)
+        for _ in range(int(rng.integers(3, 8))):
+            a, d, size = rng.random() * 6.283, 0.45 + 0.4 * rng.random(), 0.04 + 0.07 * rng.random()
+            body = np.maximum(body, np.clip((size - np.hypot(u - d * np.cos(a), v - d * np.sin(a))) * 14, 0, 1))
+        return body * (0.75 + 0.25 * n)
     if kind == "chip":
         ang = rng.random() * 3.14
         a, b = u * np.cos(ang) + v * np.sin(ang), -u * np.sin(ang) + v * np.cos(ang)
@@ -57,8 +61,8 @@ KINDS = [
     (r"ring", "ring"), (r"spark|tracer|bolt|contrail|flash h ar|electric|treadmark|spike", "streak"),
     (r"muzzle|detonate|shell flash|impact burst|flash", "star"),
     (r"smoke|cloud|dust|burst|flame|fire|steam|snow|bubbles|ripple|mask", "puff"),
-    (r"splat|burn|blood|dirt|ice|stone|metal|glass|hole|scorch", "splat"),
-    (r"chip|casing|debris|gravel|bits|bunch|shirt|rubber", "chip"),
+    (r"splat|burn|blood|hole|scorch|stain|splash", "splat"),
+    (r"chip|casing|debris|gravel|bits|bunch|shirt|rubber|dirt|ice|stone|metal|glass", "chip"),
 ]
 
 
@@ -87,6 +91,32 @@ def effect(name, tag, sk, index, im, face, base):
         m = shape(kind, x1 - x0, y1 - y0, np.random.default_rng(_seed(name, k)))
         mask[y0:y1, x0:x1] = np.maximum(mask[y0:y1, x0:x1], m[:y1 - y0, :x1 - x0])
     out = np.empty((h, w, 4), np.float32)
+    from .drawn import kept_alpha
+    kept = kept_alpha(name, index, face, im)
+    boxy = False
+    if kept is not None:
+        inside = np.zeros((h, w), bool)
+        for l, t, r, b in boxes:
+            inside[int(round(t * h)):int(round(b * h)), int(round(l * w)):int(round(r * w))] = True
+        boxy = inside.any() and (kept[inside] >= 250).mean() > 0.93
+    if boxy:
+        # the kept alpha is a full rectangle per sprite: the picture lives in the colour
+        # (added to or multiplied into the scene), so it is drawn there
+        if mean.mean() < 120:
+            out[..., :3] = bright * mask[..., None]
+        else:
+            out[..., :3] = 255 + (dark - 255) * mask[..., None]
+        out[..., 3] = kept
+        return out
+    if kept is not None:
+        # the sprite's own silhouette is kept: our colour and grain inside it
+        rng = np.random.default_rng(_seed(name, index))
+        grain = 0.7 + 0.3 * (noise(w, h, 6, rng) * 0.6 + noise(w, h, 17, rng) * 0.4)
+        body = (kept / 255.0) ** 0.6
+        low = np.where(mean.mean() > 150, dark, mean)
+        out[..., :3] = np.clip((low + (bright - low) * body[..., None]) * grain[..., None], 0, 255)
+        out[..., 3] = kept
+        return out
     if facts["alpha"] == "opaque":
         if mean.mean() < 120:       # added to the scene: black where there is nothing
             out[..., :3] = bright * mask[..., None]
