@@ -13,6 +13,9 @@ import os
 import shutil
 
 
+PART = 48 * 1024 * 1024
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("build")
@@ -32,8 +35,14 @@ def main():
         if not name.endswith(".map"):
             continue
         data = open(os.path.join(a.maps, name), "rb").read()
-        open(os.path.join(clean, name), "wb").write(data)
-        files.append({"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+        entry = {"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        if len(data) > PART * 2 - 1:      # GitHub takes no file over 100 MB: serve it in pieces
+            entry["parts"] = (len(data) + PART - 1) // PART
+            for i in range(entry["parts"]):
+                open(os.path.join(clean, f"{name}.part{i}"), "wb").write(data[i * PART:(i + 1) * PART])
+        else:
+            open(os.path.join(clean, name), "wb").write(data)
+        files.append(entry)
     json.dump({"version": a.version, "files": files}, open(os.path.join(clean, "maps.json"), "w"), indent=1)
     print(f"{a.out}: {len(files)} maps, {sum(f['size'] for f in files) / 1e6:.1f} MB")
 

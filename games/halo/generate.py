@@ -282,6 +282,23 @@ def shape(x, outline):
     return np.tanh(x * g * 1.2) / 1.2 + rng.normal(0, 4e-4, n).astype(np.float32)
 
 
+def murmur(n, rate, seed):
+    """a wordless voice-like placeholder for dialogue that has no text here:
+    a buzz with drifting pitch through two vowel resonances"""
+    from scipy.signal import lfilter
+    rng = np.random.default_rng(seed)
+    f0 = 95 + 60 * rng.random()
+    drift = np.interp(np.arange(n), np.linspace(0, n, 9), 1 + 0.18 * (rng.random(9) - 0.5))
+    phase = np.cumsum(2 * np.pi * f0 * drift / rate)
+    buzz = np.sign(np.sin(phase)) * 0.5 + np.sin(phase) * 0.5 + rng.normal(0, 0.05, n)
+    out = np.zeros(n)
+    for centre in (500 + 300 * rng.random(), 1300 + 700 * rng.random()):
+        r = 0.97
+        w = 2 * np.pi * centre / rate
+        out += lfilter([1 - r], [1, -2 * r * np.cos(w), r * r], buzz)
+    return (out / max(np.abs(out).max(), 1e-6)).astype(np.float32)
+
+
 def generate_sounds(spec, lib, out, match=None):
     facts = json.load(open(os.path.join(spec, "sounds.json")))
     spoken = 0
@@ -318,6 +335,9 @@ def generate_sounds(spec, lib, out, match=None):
                 src = lib.speak(text, rate)
                 spoken += 1
                 lib.used[rel] = "piper:en_US-ryan-high"
+            elif "/dialog/" in low:
+                src = murmur(max(total, 1), rate, int(hashlib.md5((rel + perms[h]["name"]).encode()).hexdigest()[:8], 16))
+                lib.used[rel] = "murmur (synthesised)"
             else:
                 name = lib.pick(rel, perms[h]["name"])
                 src = lib.load(name, rate)
