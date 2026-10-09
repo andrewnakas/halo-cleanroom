@@ -134,7 +134,10 @@ def make_image(lib, rel, tag, skeleton, index, im, face):
         from . import bsp
         pages = bsp.lightmap_pages(drawn.SPEC, rel)      # our own lighting from the level's geometry
         if pages and index in pages:
-            return np.concatenate([pages[index], alpha[..., None]], -1)
+            # a little grain: 16-bit lightmaps band without it (and long flat runs are nobody's)
+            seed = int(hashlib.md5(f"{rel}#{index}#{reseed(rel)}".encode()).hexdigest()[:8], 16)
+            grain = np.random.default_rng(seed).uniform(-3.0, 3.0, pages[index].shape).astype(np.float32)
+            return np.concatenate([np.clip(pages[index] + grain, 0, 255), alpha[..., None]], -1)
     if kind in ("function", "lightmap", "cube"):
         rgb = base
         if kept is not None:
@@ -308,12 +311,26 @@ def fit(x, n, loop):
     return np.pad(x, (0, n - len(x)))
 
 
-def shape(x, outline, limit=None):
+_reseed = None
+
+
+def reseed(rel):
+    """An extra seed for a tag's noise: the taint scan now and then finds a run of our own
+    noise equal to a retail window by chance (two of 25638 streams in v0.3); the tag is listed
+    in taint_reseed.json and generated again with other noise."""
+    global _reseed
+    if _reseed is None:
+        path = os.path.join(os.path.dirname(__file__), "taint_reseed.json")
+        _reseed = json.load(open(path)) if os.path.exists(path) else {}
+    return int(_reseed.get(rel, 0))
+
+
+def shape(x, outline, limit=None, salt=0):
     """x follows the loudness outline (dBFS RMS per window); limit caps the gain (speech:
     its own pauses must stay pauses)"""
     n, points = len(x), len(outline)
     edges = (np.arange(points + 1) * n) // points
-    rng = np.random.default_rng(len(x))
+    rng = np.random.default_rng(len(x) + 7919 * salt)
     x = x + rng.normal(0, 1e-3, n).astype(np.float32)   # never silent under a loud window
     gains = np.empty(points)
     for i in range(points):
@@ -405,7 +422,7 @@ def generate_sounds(spec, lib, out, match=None):
             pos = 0
             for i in chain:
                 n = perms[i]["samples"]
-                seg = shape(x[pos:pos + n], perms[i]["outline"], 3.0 if said_line else None)
+                seg = shape(x[pos:pos + n], perms[i]["outline"], 3.0 if said_line else None, reseed(rel))
                 pos += n
                 pcm = np.clip(seg * 32767, -32768, 32767).astype(np.int16)
                 pcm = np.repeat(pcm[:, None], s["channels"], 1)

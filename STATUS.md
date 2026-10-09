@@ -50,15 +50,31 @@
   The level scripts' own debug prints ("cortana: [radio] roger that...") show as green text in this build: free
   subtitles, and a second text source for the story lines.
 
-## Next (in order)
-1. Running: dialogue transcription (resumes after memory dips), retail taint index for the campaign tags.
-2. `generate --only sounds` (all sounds, spoken lines from the text), rebuild every map.
-3. Full taint scan -> 0 failing -> stage v0.3 (main site: menu + 13 MP + a10; `halo-cleanroom-maps1/2` for the rest).
-4. `game_won` transition check a10 -> a30; practice pack; polish (camouflage table, galaxy, dark level pictures).
+## v0.3 (being scanned; staged in `pages`, `pages_maps1`, `pages_maps2`)
+- Main site: wasm build + menu + 13 multiplayer maps + a10 (430 MB). Map repos: a30 a50 b30 b40 (565 MB) and
+  c10 c20 c40 d20 d40 (572 MB), served from `/halo-cleanroom-maps1/clean/` and `-maps2`; checked locally with the
+  three folders side by side (level download across the repos, next level fetched ahead).
+- **Campaign from the main menu works**: Campaign -> name a profile -> difficulty -> a10 downloads -> plays. It used
+  to stop the game ("unreachable"): four local prototypes had other types than their definitions, which link-time
+  optimization turns into traps. Fixed, and `tools/web_prototype_check.py` (OpenCE) lists such declarations.
+- Story dialogue is spoken (1070 lines: level folders, cinematics, named characters; Piper cast); combat chatter is
+  still the murmur (transcription of ~3500 lines continues; v0.4).
+- First full scan of the final tree: 25638 streams, **2 failing by one byte each** (a 65-byte run in one baked
+  lightmap page, a 33-byte run in one wave sound: our own noise meeting a retail window by chance). Lightmaps now
+  carry grain and the sound is listed in `games/halo/taint_reseed.json`; everything was rebuilt and the full scan is
+  running again. Nothing is pushed until it prints `0 failing`.
+- The taint scan is now a partitioned join (the campaign index is 15 GB in 197 chunks; the old scan would have run
+  for hours). Dirty-vs-dirty control: 26 of 27 streams fail.
+
+## Next
+1. v0.3: scan -> `0 failing` -> `sh tools/publish_halo.sh` (three repos) -> live check.
+2. v0.4: voiced combat chatter (after transcription), then the polish list.
 
 ## Not done / still open
-- Menu mouse pointer on web (menus are keyboard / pad only). Non-standard gamepad mappings. Per-level delete in
-  the launcher. Audio gaps: the counter is high while a level loads (mixer idle); real gaps in play not judged yet.
+- Menu mouse pointer on web (menus are keyboard / pad only). Non-standard gamepad mappings; a real gamepad was not
+  tried. Per-level delete in the launcher. Camouflage / reference bump tables, galaxy texture, some dark level
+  pictures. A full playthrough of each level (only the first 90 s were run). Frame rate under load was 8-10 fps in
+  the checks (the machine was saturated by other jobs); 47-80 fps when it was not.
 
 ## Pipeline (all under `games/halo/`, work dirs under `D:\n64work\halo\`)
 | Step | Command | Output |
@@ -107,7 +123,13 @@ Web build: `powershell -File D:\n64work\halo\build_web.ps1` (configure `--releas
   flat; sky galaxy and ring dull; announcer plain Piper; no practice pack; gamepad not verified.
 
 ## For the morning
-- Windows Terminal's memory swings to ~30 GB now and then (see above); restarting it would steady the machine.
-- **HUD message icons** now come from the kept 2-bit outline, so the sheet shows the game's own pictograms and
-  button letters as silhouettes (the rule you chose). Say so if you would rather have them redrawn from briefs.
-- Play https://andrewnakas.github.io/halo-cleanroom/ (v0.2).
+- Play https://andrewnakas.github.io/halo-cleanroom/ : Campaign from the menu (Enter/Space = A, Backspace/F = B,
+  1 or V = switch weapon, Tab = scoreboard).
+- **Record voices**: `D:
+64work\halo\practice_pack\<character>\` (cortana, keyes, chief, sarge, pilot, monitor,
+  marine, grunt, crewman): `SCRIPT.txt` + `practice_<who>_call_and_response.wav` (local only, from your disc).
+- **HUD message icons** come from the kept 2-bit outline, so the sheet shows the game's own pictograms and button
+  letters as silhouettes (the rule you chose). Say so if you would rather have them redrawn from briefs.
+- Windows Terminal's memory swings to ~30 GB now and then; restarting it would steady the machine.
+- Look at `D:
+64work\halo\shots\smoke\campaign1.png`, `campaign2.png`, `clean_hud2.png`, `clean_pics.png`.
