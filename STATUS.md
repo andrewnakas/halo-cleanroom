@@ -10,6 +10,10 @@
 - Clean-room tools ready (games/halo): `xiso_extract.py` (dirty: XDVDFS -> maps/), `codecs.py`
   (DXT1/3/5 + Xbox ADPCM encode/decode, self-test), `fetch_cc0.py` (ambientCG CC0 library ->
   `D:\n64work\halo\cc0\textures`, rows in `assets/LICENSES.csv`).
+- CC0 sound library: 6 Kenney packs (470 sfx, 12 MB) in `D:
+64work\halo\cc0\sounds`. Texture fetch
+  restarted 2026-10-09 (owner said go) as a detached process, log `D:
+64work\haloetch_cc0.log`.
 - Step 2 (dirty room): **BLOCKED on XISO** (owner drops it in `D:\n64work\halo\`).
 
 ## Decisions (2026-10-08)
@@ -57,6 +61,4 @@ Output: `build/web/site`.
 4. Site: "Play (clean maps)" downloads our maps into OPFS; "BYO XISO" keeps fqlx's import.
 
 ## For the morning
-- The CC0 texture fetch (`python -m games.halo.fetch_cc0 D:/n64work/halo/cc0/textures`) was stopped by
-  Claude Code under low system memory; not restarted automatically. It resumes where it stopped.
 - Drop the Xbox XISO into `D:\n64work\halo\`.
