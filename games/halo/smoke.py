@@ -27,11 +27,11 @@ def main():
         script = "2:cheat_deathless_player 1"
         nxt = ORDER[ORDER.index(level) + 1] if follow and level != ORDER[-1] else None
         if nxt:
-            script += f";{int(last) + 5}:game_won"
+            script += ";20:game_won"         # (seconds of game time: a loaded machine runs slower than the wall clock)
         query = urllib.parse.urlencode({"auto": 1, "menu": 1, "level": level, "fps": 1,
                                         "env": "HALO_TEST_SCRIPT=" + script})
         folder = os.path.join(out, level)
-        shots = secs + (f",{int(last) + 60}" if nxt else "")
+        shots = secs + (f",{int(last) + 90}" if nxt else "")
         keys = ",".join(f"Enter@{t}" for t in (12, 20, 28, 36)) + f",KeyW@{int(last) - 12}-{int(last) - 4}"
         run = subprocess.run([sys.executable, "ports/wasm/cdp_shot.py", folder, "--url", f"{base}?{query}",
                               "--t0", f"map {level}: downloaded", "--secs", shots, "--keys", keys,
