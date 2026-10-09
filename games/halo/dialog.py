@@ -11,6 +11,7 @@ Clean room: `speak(...)` voices a line with a Piper voice chosen per character (
 until the owner records; no cloning, nothing trained on retail audio).
 """
 import hashlib
+from fractions import Fraction
 import json
 import os
 import re
@@ -159,9 +160,8 @@ def speak(who, text, rate, n):
     best = None
     for k in range(7):                         # speak faster until the line fits its slot
         raw, sr = _piper(name, text, pace * f * (0.88 ** k))
-        up, down = int(round(rate * 1000)), int(round(sr * f * 1000))
-        g = np.gcd(up, down)
-        x = resample_poly(raw, up // g, down // g).astype(np.float32)
+        ratio = Fraction(rate / (sr * f)).limit_denominator(400)
+        x = resample_poly(raw, ratio.numerator, ratio.denominator).astype(np.float32)
         loud = np.flatnonzero(np.abs(x) > 0.01)
         if len(loud):
             x = x[max(0, loud[0] - 200):loud[-1] + 400]

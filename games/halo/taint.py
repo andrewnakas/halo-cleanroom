@@ -180,18 +180,84 @@ def main():
     n_retail = len(retail)
 
     def scan(labelled):
+        """Every clean window against the retail index, as a partitioned join: with the
+        campaign the index is ~200 sorted chunks, and probing each of them for every stream
+        took hours. The clean windows (hash, stream, offset) are written to 256 buckets by
+        the hash's top byte; each bucket is then joined in memory with the retail hashes of
+        the same byte. Linear in the data, a few hundred MB of memory."""
+        import shutil
+        import tempfile
+        buckets = 256
+        record = np.dtype([("h", "<u8"), ("s", "<u4"), ("p", "<u4")])
+        work = tempfile.mkdtemp(prefix="taint_", dir=cache or None)
+        files = [open(os.path.join(work, f"{k:03d}.bin"), "wb") for k in range(buckets)]
+        labels, pending, held = [], [], 0
+
+        def spill():
+            nonlocal held
+            if not pending:
+                return
+            rec = np.concatenate(pending)
+            pending.clear()
+            held = 0
+            top = (rec["h"] >> np.uint64(56)).astype(np.uint8)
+            order = np.argsort(top, kind="stable")
+            rec, top = rec[order], top[order]
+            cuts = np.searchsorted(top, np.arange(buckets + 1))
+            for k in range(buckets):
+                if cuts[k + 1] > cuts[k]:
+                    files[k].write(rec[cuts[k]:cuts[k + 1]].tobytes())
+        try:
+            for label, stream in labelled:
+                sid = len(labels)
+                labels.append(label)
+                h, per = taint._hashes(stream)
+                if not len(h):
+                    continue
+                at = np.nonzero(~per)[0]
+                rec = np.empty(len(at), record)
+                rec["h"], rec["s"], rec["p"] = h[at], sid, at
+                pending.append(rec)
+                held += len(rec)
+                if held > 16_000_000:
+                    spill()
+            spill()
+            for f in files:
+                f.close()
+            found = []
+            for k in range(buckets):
+                rec = np.fromfile(os.path.join(work, f"{k:03d}.bin"), record)
+                if not len(rec):
+                    continue
+                lo_key = np.uint64(k) << np.uint64(56)
+                parts = []
+                for index in chunks:
+                    lo = int(np.searchsorted(index, lo_key))
+                    hi = len(index) if k == buckets - 1 else int(np.searchsorted(index, np.uint64(k + 1) << np.uint64(56)))
+                    if hi > lo:
+                        parts.append(np.asarray(index[lo:hi]))
+                if not parts:
+                    continue
+                retail_part = np.sort(np.concatenate(parts))
+                pos = np.minimum(np.searchsorted(retail_part, rec["h"]), len(retail_part) - 1)
+                hit = retail_part[pos] == rec["h"]
+                if hit.any():
+                    found.append(rec[hit][["s", "p"]])
+        finally:
+            for f in files:
+                f.close()
+            shutil.rmtree(work, ignore_errors=True)
         out = []
-        for label, s in labelled:
-            h, per = taint._hashes(s)
-            if not len(h):
-                continue
-            m = np.zeros(len(h), bool)
-            for index in chunks:
-                pos = np.minimum(np.searchsorted(index, h), len(index) - 1)
-                m |= index[pos] == h
-            m &= ~per
-            if m.any():
-                out.append((label, int(np.nonzero(m)[0][0]), int(m.sum()), taint._max_run(m)))
+        if found:
+            rec = np.concatenate(found)
+            rec = rec[np.lexsort((rec["p"], rec["s"]))]
+            starts = np.concatenate([[0], np.nonzero(np.diff(rec["s"]))[0] + 1, [len(rec)]])
+            for i in range(len(starts) - 1):
+                p_ = rec["p"][starts[i]:starts[i + 1]].astype(np.int64)
+                # consecutive offsets are one shared run of (windows + WINDOW - 1) bytes
+                breaks = np.concatenate([[0], np.nonzero(np.diff(p_) != 1)[0] + 1, [len(p_)]])
+                run = int(np.diff(breaks).max()) + taint.WINDOW - 1
+                out.append((labels[int(rec["s"][starts[i]])], int(p_[0]), len(p_), run))
         return out
     n_clean, hits = 0, []
 
