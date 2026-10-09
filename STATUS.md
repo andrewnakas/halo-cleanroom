@@ -5,12 +5,11 @@
   the live page was checked headless (boots to the main menu). Repo `andrewnakas/halo-cleanroom` (main = tools,
   gh-pages = site). `tools/publish_halo.sh` now refuses unless `D:/n64work/halo/taint_site.log` says `0 failing`
   and is newer than every staged map's build.
-- **BLOCKED on machine memory (17:50 UTC)**: free commit fell to ~0.5 GB; even `import numpy` fails. The holder is
-  **WindowsTerminal.exe (PID 25988): ~30 GB private memory and growing** (page file is on C: only, C: is full).
-  Restarting Windows Terminal (or a page file on D:) frees it. A watcher resumes the heavy jobs when free commit
-  is above 6 GB. Hit so far: the bitmap regeneration died halfway (MemoryError) and one headless a10 run lost its
-  GL context. **`clean/tags` bitmaps are therefore half old, half new: nothing may be staged from it until the
-  regeneration and a full taint scan finish.** The published site is not affected.
+- **Machine memory comes and goes**: `WindowsTerminal.exe` (PID 25988) swings between 2 and 30 GB; while it is high,
+  free commit is under 1 GB (even `import numpy` fails) and the page file fills C:. Heavy jobs run one at a time
+  and are resumable; code-only work fills the gaps. Two jobs died to it and were rerun.
+- **`clean/tags` is ahead of the published site and NOT taint-scanned yet** (every bitmap regenerated with the alpha
+  outline, baked lightmaps, campaign tags added). Nothing is staged from it until a full scan prints `0 failing`.
 - Owner decisions this session: **2-bit alpha outline** (SM64 rule) replaces the strict alpha class; campaign
   dialogue may be **transcribed to text** and voiced with Piper; campaign maps go into **extra Pages repos**
   (same origin); publish and keep pushing whatever passes taint.
@@ -29,15 +28,25 @@
 - Tools: `extract_tags --add / --redo bitmaps` (598 alpha outlines kept in `spec/alpha2`), `generate` uses the
   outline, `hek.py` reads **every** kept tag through Invader's definitions (5218 of 5218), `build_maps.py`
   (extract / generate / build per map), `make_site.py --maps/--extra`, `cdp_shot.py` (no more lost shots, `--t0`).
-- Written, **not run yet** (memory): `bsp.py` = level geometry + our own lightmaps (sun shadow map + sky light
-  from the sky tag's numbers, carried on the kept 4x4 grid).
+- Assets (all verified on sheets and in Blood Gulch):
+  - **Lightmaps are baked from the level's own geometry** (`bsp.py`: sun shadow map + sky light, numbers from the sky
+    tag), carried on the kept 4x4 grid. Found on the way: unused lightmap texels are flat orange, which had tinted
+    the old flat lighting; the lit colour is now solved against our own chart coverage.
+  - **HUD from the kept outlines**: motion sensor, reticles, frames, ammo counter, message icons. **Shield and
+    health bars fill** (the engine reads the fill ramp from brightness, the shape from alpha; it was the other way
+    round). Text pieces stay re-typeset; hairline pieces keep their drawn briefs.
+  - Effects, decals, foliage, sky ring and clouds keep their silhouettes; stains are no longer flowers.
+  - **Level pictures** (menu thumbnails, map cards) are 3/4 renders of each level's geometry with our lighting.
+- Campaign: **all ten levels extracted** into the dirty tree and the spec (9008 tags, 3751 images, 15834 sound
+  permutations). Dialogue: `dialog.py` (dirty room: speech -> text only; clean room: Piper cast per character).
 
-## Next (in order, when memory allows)
-1. `python -m games.halo.generate spec cc0 clean/tags --only bitmaps` (all bitmaps with the outline), sheets.
-2. Lightmaps (`bsp.py`), HUD briefs (sensor 6/7, message icons, meter direction), effects, sky, level pictures.
-3. a10 gameplay check after the cinematic; then extract/generate/build a30 ... d40 (`build_maps.py`).
-4. Dialogue: `transcribe.py` (dirty room, text only) -> Piper lines; practice pack.
-5. Full taint scan -> v0.3 (fixes + a10 + a30), then the remaining levels in `halo-cleanroom-maps1/2`.
+## Next (in order)
+1. Running: bitmaps for the campaign tags (`generate --add --only bitmaps`), dialogue transcription (small.en; the
+   cached medium.en model is incomplete and its download stalls).
+2. `generate --only sounds` (all sounds, spoken lines from the text), `build_maps build campaign`.
+3. Full taint scan -> 0 failing -> stage v0.3 (main site: menu + 13 MP + a10; map repos for the rest).
+4. Browser check per level (loads, plays 60 s, `game_won` reaches the next level).
+5. Practice pack for recording; remaining polish (camouflage / bump tables, galaxy, darker level pictures).
 
 ## Not done / still open
 - Menu mouse pointer on web (menus are keyboard / pad only). Non-standard gamepad mappings. Per-level delete in
@@ -90,5 +99,7 @@ Web build: `powershell -File D:\n64work\halo\build_web.ps1` (configure `--releas
   flat; sky galaxy and ring dull; announcer plain Piper; no practice pack; gamepad not verified.
 
 ## For the morning
-- **Restart Windows Terminal** (it holds ~30 GB) or tell the session memory is free; everything heavy waits on it.
+- Windows Terminal's memory swings to ~30 GB now and then (see above); restarting it would steady the machine.
+- **HUD message icons** now come from the kept 2-bit outline, so the sheet shows the game's own pictograms and
+  button letters as silhouettes (the rule you chose). Say so if you would rather have them redrawn from briefs.
 - Play https://andrewnakas.github.io/halo-cleanroom/ (v0.2).
