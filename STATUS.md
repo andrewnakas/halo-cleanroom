@@ -9,8 +9,7 @@
   writes the `.complete` marker; only `ui.map` is required to start. BYO XISO import unchanged.
 - Clean-room tools ready (games/halo): `xiso_extract.py` (dirty: XDVDFS -> maps/), `codecs.py`
   (DXT1/3/5 + Xbox ADPCM encode/decode, self-test), `fetch_cc0.py` (ambientCG CC0 library ->
-  `D:
-64work\halo\cc0	extures`, rows in `assets/LICENSES.csv`).
+  `D:\n64work\halo\cc0\textures`, rows in `assets/LICENSES.csv`).
 - Step 2 (dirty room): **BLOCKED on XISO** (owner drops it in `D:\n64work\halo\`).
 
 ## Decisions (2026-10-08)
