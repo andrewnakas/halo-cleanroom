@@ -1,6 +1,6 @@
 """Taint scan: no retail pixels, samples or glyphs in the clean tag tree.
 
-    python -m games.halo.taint <dirty tags> <clean tags> [--match regex]
+    python -m games.halo.taint <dirty tags> <clean tags> [--index dir] [--match regex]
 
 The harness criterion (cleanroom.taint): every decoded stream of the clean
 tree (bitmap RGBA per image and face, sound PCM per permutation, font
@@ -124,20 +124,41 @@ def main():
     # PCM tails collide by chance. The positive control (dirty vs dirty)
     # still fails every textured image and every audible sound.
     taint.MIN_DISTINCT = 10
-    # the retail index stays in sorted chunks (one union of ~150M hashes needs several GB)
-    chunks, batch, n_retail = [], [], 0
-    retail = {}
-    for label, s in streams(dirty):
-        retail[label] = hash(s)
-        h, per = taint._hashes(s)
-        batch.append(h[~per])
-        n_retail += 1
-        if sum(len(x) for x in batch) > 8_000_000:
-            chunks.append(np.unique(np.concatenate(batch)))
-            batch = []
-    if batch:
-        chunks.append(np.unique(np.concatenate(batch)))
-    del batch
+    # The retail index stays in sorted chunks (one union of ~150M hashes needs
+    # several GB). --index DIR keeps it on disk: built once from the whole
+    # dirty tree, then every scan (also with --match, which then filters the
+    # clean side only) reads it back.
+    import hashlib
+    digest = lambda data: hashlib.md5(data).hexdigest()
+    cache = sys.argv[sys.argv.index("--index") + 1] if "--index" in sys.argv else None
+    chunks, batch, n_retail, retail = [], [], 0, {}
+    if cache and os.path.isfile(os.path.join(cache, "meta.json")):
+        meta = json.load(open(os.path.join(cache, "meta.json")))
+        retail, n_retail = meta["streams"], len(meta["streams"])
+        chunks = [np.load(os.path.join(cache, f"chunk_{i}.npy"), mmap_mode="r") for i in range(meta["chunks"])]
+    else:
+        keep_match, MATCH = MATCH, (None if cache else MATCH)
+
+        def flush():
+            chunk = np.unique(np.concatenate(batch))
+            if cache:
+                os.makedirs(cache, exist_ok=True)
+                np.save(os.path.join(cache, f"chunk_{len(chunks)}.npy"), chunk)
+                chunk = np.load(os.path.join(cache, f"chunk_{len(chunks)}.npy"), mmap_mode="r")
+            chunks.append(chunk)
+            batch.clear()
+        for label, s in streams(dirty):
+            retail[label] = digest(s)
+            h, per = taint._hashes(s)
+            batch.append(h[~per])
+            n_retail += 1
+            if sum(len(x) for x in batch) > 8_000_000:
+                flush()
+        if batch:
+            flush()
+        if cache:
+            json.dump({"streams": retail, "chunks": len(chunks)}, open(os.path.join(cache, "meta.json"), "w"))
+        MATCH = keep_match
 
     def scan(labelled):
         out = []
@@ -160,7 +181,7 @@ def main():
         for item in streams(clean):
             n_clean += 1
             # the same stream as retail's of that name, and not a flat fill
-            if retail.get(item[0]) == hash(item[1]) and len(set(item[1][:65536])) > 8:
+            if retail.get(item[0]) == digest(item[1]) and len(set(item[1][:65536])) > 8:
                 same.append((item[0], 0, 0, len(item[1])))
             yield item
     same = []
