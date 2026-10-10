@@ -1,15 +1,14 @@
 # Halo: Combat Evolved clean room: status
 
-## Now (2026-10-09, session 2)
-- **PUBLISHED v0.2**: https://andrewnakas.github.io/halo-cleanroom/ (menu + 13 multiplayer maps, taint 0 failing);
-  the live page was checked headless (boots to the main menu). Repo `andrewnakas/halo-cleanroom` (main = tools,
-  gh-pages = site). `tools/publish_halo.sh` now refuses unless `D:/n64work/halo/taint_site.log` says `0 failing`
-  and is newer than every staged map's build.
+## Now (2026-10-09, end of session 2)
+- **PUBLISHED v0.4**: https://andrewnakas.github.io/halo-cleanroom/ : menu, 13 multiplayer maps and the whole
+  campaign (10 levels, downloaded as you reach them), taint 0 failing. Repos `andrewnakas/halo-cleanroom` (main =
+  tools, gh-pages = site), `halo-cleanroom-maps1`, `halo-cleanroom-maps2` (campaign maps). `tools/publish_halo.sh`
+  pushes all three and refuses unless `D:/n64work/halo/taint_site.log` says `0 failing` and is newer than every
+  staged map's build.
 - **Machine memory comes and goes**: `WindowsTerminal.exe` (PID 25988) swings between 2 and 30 GB; while it is high,
   free commit is under 1 GB (even `import numpy` fails) and the page file fills C:. Heavy jobs run one at a time
   and are resumable; code-only work fills the gaps. Two jobs died to it and were rerun.
-- **`clean/tags` is ahead of the published site and NOT taint-scanned yet** (every bitmap regenerated with the alpha
-  outline, baked lightmaps, campaign tags added). Nothing is staged from it until a full scan prints `0 failing`.
 - Owner decisions this session: **2-bit alpha outline** (SM64 rule) replaces the strict alpha class; campaign
   dialogue may be **transcribed to text** and voiced with Piper; campaign maps go into **extra Pages repos**
   (same origin); publish and keep pushing whatever passes taint.
@@ -69,9 +68,15 @@
 - The taint scan is a partitioned join now (the campaign index is 15 GB); a full scan took 50 min to 3 h depending
   on how busy the disk was. It keeps a bucketed copy of the index from now on (sequential reads).
 
-## v0.4 (in progress)
-- All 5228 transcribed lines are spoken now (marines, sergeants, grunts added: 4093 lines), galaxy texture drawn.
-- Running: rebuild of every map -> full taint scan -> stage -> publish (only on `0 failing`).
+## v0.4: PUBLISHED and checked live (2026-10-09 night)
+- Adds: **every transcribed line is spoken** (5228 lines: story + marines, sergeants, grunts; aliens without words
+  keep the murmur), galaxy sky texture.
+- Taint on the final tree: `25638 generated streams scanned against 25638 retail streams; 11850 with short
+  coincidental matches; 0 failing` (`D:/n64work/halo/taint_site.log`); no tag changed between the build and the scan.
+- Live check: manifest 0.4, a map piece of `-maps2` matches the manifest's hash, c10 downloaded and played from
+  the published page (`D:/n64work/halo/shots/live_v04/`).
+- Seen on the live site both times: the first attempt of a level download ends with "network error" and the
+  retry (4 s later) succeeds. It heals itself; the cause was not looked into.
 
 ## Not done / still open
 - Menu mouse pointer on web (menus are keyboard / pad only). Non-standard gamepad mappings; a real gamepad was not
