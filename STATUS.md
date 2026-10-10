@@ -50,25 +50,28 @@
   The level scripts' own debug prints ("cortana: [radio] roger that...") show as green text in this build: free
   subtitles, and a second text source for the story lines.
 
-## v0.3 (being scanned; staged in `pages`, `pages_maps1`, `pages_maps2`)
-- Main site: wasm build + menu + 13 multiplayer maps + a10 (430 MB). Map repos: a30 a50 b30 b40 (565 MB) and
-  c10 c20 c40 d20 d40 (572 MB), served from `/halo-cleanroom-maps1/clean/` and `-maps2`; checked locally with the
-  three folders side by side (level download across the repos, next level fetched ahead).
+## v0.3: PUBLISHED and checked live (2026-10-09 evening)
+- https://andrewnakas.github.io/halo-cleanroom/ : wasm build + menu + 13 multiplayer maps + a10 (430 MB). Campaign
+  maps a30 a50 b30 b40 in `andrewnakas/halo-cleanroom-maps1` and c10 c20 c40 d20 d40 in `-maps2` (same origin).
+  Live check: the published page downloaded a30 from the maps1 repo (one network error, retried by itself) and
+  played it (`D:/n64work/halo/shots/live_v03/`).
+- **Taint: `25638 generated streams scanned against 25638 retail streams; 11898 with short coincidental matches;
+  0 failing`** (`D:/n64work/halo/taint_site.log`). The first full scan had 2 failing by one byte each (a 65-byte run
+  in one baked lightmap page, a 33-byte run in one wave sound: our own noise meeting a retail window by chance);
+  lightmaps got grain, the sound is in `games/halo/taint_reseed.json`, everything was rebuilt and scanned again.
+  Thresholds unchanged. Dirty-vs-dirty control: 26 of 27 streams fail.
 - **Campaign from the main menu works**: Campaign -> name a profile -> difficulty -> a10 downloads -> plays. It used
   to stop the game ("unreachable"): four local prototypes had other types than their definitions, which link-time
-  optimization turns into traps. Fixed, and `tools/web_prototype_check.py` (OpenCE) lists such declarations.
-- Story dialogue is spoken (1070 lines: level folders, cinematics, named characters; Piper cast); combat chatter is
-  still the murmur (transcription of ~3500 lines continues; v0.4).
-- First full scan of the final tree: 25638 streams, **2 failing by one byte each** (a 65-byte run in one baked
-  lightmap page, a 33-byte run in one wave sound: our own noise meeting a retail window by chance). Lightmaps now
-  carry grain and the sound is listed in `games/halo/taint_reseed.json`; everything was rebuilt and the full scan is
-  running again. Nothing is pushed until it prints `0 failing`.
-- The taint scan is now a partitioned join (the campaign index is 15 GB in 197 chunks; the old scan would have run
-  for hours). Dirty-vs-dirty control: 26 of 27 streams fail.
+  optimization turns into traps. Fixed; `tools/web_prototype_check.py` (OpenCE) lists such declarations.
+- Story dialogue is spoken (1070 lines: level folders, cinematics, named characters; Piper cast). Combat chatter
+  was still the murmur in v0.3.
+- Gamepad: checked with a stubbed standard pad (left stick walks, right stick turns). A real pad was not tried.
+- The taint scan is a partitioned join now (the campaign index is 15 GB); a full scan took 50 min to 3 h depending
+  on how busy the disk was. It keeps a bucketed copy of the index from now on (sequential reads).
 
-## Next
-1. v0.3: scan -> `0 failing` -> `sh tools/publish_halo.sh` (three repos) -> live check.
-2. v0.4: voiced combat chatter (after transcription), then the polish list.
+## v0.4 (in progress)
+- All 5228 transcribed lines are spoken now (marines, sergeants, grunts added: 4093 lines), galaxy texture drawn.
+- Running: rebuild of every map -> full taint scan -> stage -> publish (only on `0 failing`).
 
 ## Not done / still open
 - Menu mouse pointer on web (menus are keyboard / pad only). Non-standard gamepad mappings; a real gamepad was not
