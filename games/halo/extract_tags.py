@@ -13,7 +13,9 @@ Coarse only:
           opaque, its alpha outline at 2 bits per texel (spec/alpha2/<tag>/<image>_<face>.bin,
           the rule of the SM64 clean room; owner's decision 2026-10-09)
   sound   skeleton tag (samples and mouth data zeroed) + per permutation its
-          length and a loudness outline (RMS in 3 dB steps, <= 32 points)
+          length, a loudness outline (RMS in 3 dB steps, <= 32 points) and a coarse
+          band outline (8 octave bands x <= 64 windows, 3 dB steps: games/halo/bands.py;
+          owner's request 2026-10-10) with one number for how noisy or tonal it is
   font    skeleton tag (glyph pixels zeroed; metrics are numbers)
 The spec is the only input of the clean room (games/halo/generate.py).
 """
@@ -26,7 +28,7 @@ import numpy as np
 
 from cleanroom.decomp.spec import alpha2
 
-from . import tags
+from . import bands, tags
 from .codecs import decode_xbox_adpcm
 
 ASSET = (".bitmap", ".sound", ".font")
@@ -105,7 +107,8 @@ def main():
             rel = os.path.relpath(p, src).replace("\\", "/")
             dest = os.path.join(out_tags, rel)
             have = (add or redo) and os.path.exists(dest)
-            if have and not (redo == "bitmaps" and name.endswith(".bitmap")):
+            if have and not (redo == "bitmaps" and name.endswith(".bitmap")) and \
+                    not (redo == "sounds" and name.endswith(".sound")):
                 kept += not name.endswith(ASSET)
                 fonts += name.endswith(".font")
                 continue
@@ -124,7 +127,8 @@ def main():
                     pcm = decode_xbox_adpcm(t.samples(pm), t.channels) if pm["compression"] == 1 else np.zeros((1, 1))
                     perms.append({"name": pm["name"], "range": pm["range"], "next": pm["next"], "actual": pm["actual"],
                                   "samples": int(len(pcm)),
-                                  "outline": outline(pcm, t.rate)})
+                                  "outline": outline(pcm, t.rate),
+                                  "bands": bands.outline(pcm, t.rate), "flat": bands.flatness(pcm)})
                     t.data[pm["offset"]:pm["offset"] + pm["size"] + pm["mouth_size"]] = bytes(pm["size"] + pm["mouth_size"])
                 sounds[rel] = {"class": t.sound_class, "rate": t.rate, "channels": t.channels, "perms": perms}
                 t.save(dest)

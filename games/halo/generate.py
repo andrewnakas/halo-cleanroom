@@ -363,7 +363,7 @@ def murmur(n, rate, seed):
 
 
 def generate_sounds(spec, lib, out, match=None):
-    from . import dialog
+    from . import bands, dialog
     facts = json.load(open(os.path.join(spec, "sounds.json")))
     spoken = 0
     text_path = os.path.join(spec, "dialog.json")
@@ -422,7 +422,14 @@ def generate_sounds(spec, lib, out, match=None):
             pos = 0
             for i in chain:
                 n = perms[i]["samples"]
-                seg = shape(x[pos:pos + n], perms[i]["outline"], 3.0 if said_line else None, reseed(rel))
+                if "bands" in perms[i] and not said_line and "/dialog/" not in low:
+                    # the band outline: each band's level over time, whatever the source was
+                    rng = np.random.default_rng(n + 7919 * reseed(rel) + i)
+                    # (a noisy original gets noise in the source too, by how noisy it is)
+                    grit = rng.standard_normal(n).astype(np.float32) * 0.08 * float(perms[i].get("flat", 0.5))
+                    seg = bands.shape(x[pos:pos + n] + grit, perms[i]["bands"], rate, rng)
+                else:
+                    seg = shape(x[pos:pos + n], perms[i]["outline"], 3.0 if said_line else None, reseed(rel))
                 pos += n
                 pcm = np.clip(seg * 32767, -32768, 32767).astype(np.int16)
                 pcm = np.repeat(pcm[:, None], s["channels"], 1)
