@@ -13,6 +13,30 @@
   dialogue may be **transcribed to text** and voiced with Piper; campaign maps go into **extra Pages repos**
   (same origin); publish and keep pushing whatever passes taint.
 
+
+## CC0-only release (branch `cc0-only`, 2026-10-10, written on the Mac; NOT yet run)
+Owner's rule for exebrowser.com: **every shipped asset is CC0 or public domain**, re-derived or regenerated.
+v0.4 fails it in three places, all fixed in code on this branch:
+- **Fonts:** Overpass (OFL) and OpenCE-Regular (OFL) -> **Kenney Future / Kenney Future Narrow (CC0)**
+  in generate.py (font tags), drawn.py and hud.py.
+- **Menu titles:** upstream's pictures are no longer used. `drawn.title` sets each letter in Kenney Future at
+  the positions in upstream's `titles.json`, which holds only layout facts.
+- **Voices:** checked each Piper MODEL_CARD. ryan and hfc_female are CC BY-NC-SA. amy and joe are fine-tuned
+  from lessac, which is non-commercial. Only **ljspeech-high** and **kristin-medium** (public-domain data, trained
+  from scratch) remain (`dialog.VOICES`); male parts are pitched down. **Every spoken line must be regenerated.**
+- **Engine:** OpenCE branch `cc0-clean` (from `web`). With `--web-clean`, `tools/embed_assets.py` embeds
+  `fonts.clean.json` (Kenney fonts) and **no** title pictures. Overpass is no longer in the wasm.
+- **Licence gate:** `python -m games.halo.license_audit <clean dir> <site dir>` must print `0 failing`.
+  `tools/publish_halo.sh` now runs it for every site.
+
+Runbook (Windows box):
+1. `git fetch && git checkout cc0-only`; in OpenCE: `git checkout cc0-clean`.
+2. `python -m games.halo.fetch_free D:/n64work/halo/cc0 --voices %PIPER_VOICES%` fetches the fonts, titles.json and voices, with pinned hashes and a MODEL_CARD check.
+3. `python -m games.halo.generate spec cc0 clean/tags --only fonts`, then `--only bitmaps --match "ui/|hud"` (titles, HUD and
+   menu text), then `--only sounds` (all of them: the voices changed). Rebuild every map with invader-build.
+4. Run the taint scan until it prints `0 failing` (`taint_site.log`), then `license_audit` for each site dir, then the web build with `--web-clean`.
+5. `make_site ... --version 0.5`, look at the menu and Blood Gulch, then `sh tools/publish_halo.sh` (`SITE_MESSAGE="Site v0.5 (CC0 only)"`).
+
 ## Done this session
 - Engine/launcher (OpenCE `web`, commit f81d8f3d, built, checked headless with the real GPU at ~47 fps):
   - Levels download **on demand**: a map missing from the browser is fetched by the page while the game waits

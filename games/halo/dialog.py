@@ -8,7 +8,8 @@ spec/dialog.json. No audio, no voice model, no timing beyond the kept length and
 The run is resumable (lines already in dialog.json are skipped).
 
 Clean room: `speak(...)` voices a line with a Piper voice chosen per character (placeholders
-until the owner records; no cloning, nothing trained on retail audio).
+until the owner records; no cloning, nothing trained on retail audio; only voices in VOICES,
+whose model and data are public domain).
 """
 import hashlib
 from fractions import Fraction
@@ -21,22 +22,31 @@ import numpy as np
 
 PIPER = os.environ.get("PIPER_VOICES", "C:/Users/andre/n64work/piper_voices")
 
+# Voices whose model AND training data are public domain / CC0 (checked against each MODEL_CARD,
+# 2026-10-10). Anything fine-tuned from lessac (non-commercial) or trained on CC BY-NC-SA data is out:
+# that removed ryan, amy, joe and hfc_female. Both survivors are female; men are pitched down.
+VOICES = {
+    "en_US-ljspeech-high": "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/high (LJ Speech, public domain; trained from scratch)",
+    "en_US-kristin-medium": "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/kristin/medium (LibriVox, public domain; trained from scratch)",
+}
+
 # who -> (piper voice, semitones, pace); pace < 1 speaks faster
 CAST = {
-    "cortana": ("en_US-amy-medium", 0.0, 0.95),
-    "keyes": ("en_US-joe-medium", -1.5, 1.05),
-    "chief": ("en_US-ryan-high", -3.0, 1.05),
-    "sarge": ("en_US-joe-medium", -2.5, 0.92),
+    "cortana": ("en_US-ljspeech-high", 1.0, 0.95),
+    "keyes": ("en_US-kristin-medium", -6.0, 1.05),
+    "chief": ("en_US-ljspeech-high", -7.0, 1.05),
+    "sarge": ("en_US-kristin-medium", -7.5, 0.92),
     "pilot": ("en_US-kristin-medium", 0.0, 0.95),
-    "monitor": ("en_US-ryan-high", 4.0, 0.9),
-    "grunt": ("en_US-joe-medium", 7.0, 0.9),
-    "crewman": ("en_US-ryan-high", 0.5, 1.0),
-    "marine": ("en_US-ryan-high", -0.5, 0.95),
-    "marine2": ("en_US-joe-medium", 0.5, 0.95),
-    "marine3": ("en_US-ryan-high", 1.5, 0.92),
-    "woman": ("en_US-hfc_female-medium", 0.0, 0.97),
-    "announcer": ("en_US-ryan-high", 0.0, 1.0),
+    "monitor": ("en_US-ljspeech-high", 3.0, 0.9),
+    "grunt": ("en_US-kristin-medium", 4.0, 0.9),
+    "crewman": ("en_US-ljspeech-high", -5.0, 1.0),
+    "marine": ("en_US-ljspeech-high", -6.0, 0.95),
+    "marine2": ("en_US-kristin-medium", -5.5, 0.95),
+    "marine3": ("en_US-ljspeech-high", -4.5, 0.92),
+    "woman": ("en_US-kristin-medium", -1.0, 0.97),
+    "announcer": ("en_US-ljspeech-high", -6.5, 1.0),
 }
+assert all(v in VOICES for v, _, _ in CAST.values()), "every cast voice must be a public-domain voice"
 ALIEN = re.compile(r"/(elite|jackal|hunter|flood|infection|sentinel|engineer)[^/]*/|_(elite|jackal|hunter|flood)\b")
 
 

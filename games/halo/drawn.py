@@ -3,8 +3,8 @@ material (menus, HUD, engine function textures). Each drawer gets the kept
 facts only (name, size, colour grid, alpha class, sprite rectangles) and
 returns (h,w,4) float RGBA, or None to fall through to generate.py.
 
-Everything here is our own drawing: shapes from code, text set in free fonts
-(Overpass, OpenCE/Newtown). Briefs were written after one look at a dirty
+Everything here is our own drawing: shapes from code, text set in CC0 fonts
+(Kenney Future, Kenney Future Narrow). Briefs were written after one look at a dirty
 contact sheet (what each picture is), never from its pixels.
 """
 import json
@@ -22,7 +22,7 @@ NAVY = (6, 16, 40)
 _fonts, _titles = {}, None
 
 
-def font(size, name="Overpass-900.ttf"):
+def font(size, name="Kenney Future.ttf"):
     k = (name, int(size))
     if k not in _fonts:
         _fonts[k] = ImageFont.truetype(os.path.join(CC0, "fonts", name), int(size))
@@ -76,7 +76,7 @@ class Canvas:
     def ellipse(self, box, fill=None, outline=None, width=1):
         self.d.ellipse(self.s(*box), fill=fill, outline=outline, width=max(1, int(width * SS)))
 
-    def text(self, xy, s, size, fill, anchor="mm", name="Overpass-900.ttf"):
+    def text(self, xy, s, size, fill, anchor="mm", name="Kenney Future.ttf"):
         self.d.text((xy[0] * SS, xy[1] * SS), s, font=font(size * SS, name), fill=fill, anchor=anchor)
 
     def glow(self, radius, color):
@@ -249,7 +249,7 @@ def rules_options(name, tag, sk, index, im, face, base):
         c.rrect((2, h * 0.18, w - 2, h * 0.62), 6, fill=NAVY + (255,), outline=(255, 255, 255, 255), width=1.5)
         c.text((10, h * 0.25), "SAVE CHANGES ?", h * 0.07, BLUE + (255,), anchor="lm")
         c.d.multiline_text((10 * SS, h * 0.42 * SS), "Are you sure you want to\npermanently save all\nchanges to your rules?",
-                           font=font(h * 0.06 * SS, "Overpass-750.ttf"), fill=BLUE + (255,), anchor="lm", spacing=2 * SS)
+                           font=font(h * 0.06 * SS, "Kenney Future Narrow.ttf"), fill=BLUE + (255,), anchor="lm", spacing=2 * SS)
         return c.out()
     icon(c, GAME_ICONS[index], w * 0.14, h * 0.14, w * 0.72, (2, 8, 20, 255))
     c.glow(w / 60, BLUE)
@@ -276,7 +276,7 @@ def difficulty(name, tag, sk, index, im, face, base):
 def logo(name, tag, sk, index, im, face, base):
     w, h = im["w"], im["h"]
     c = Canvas(w, h)
-    c.text((w / 2, h * 0.5), "H A L O", h * 0.3, (255, 255, 255, 255), name="OpenCE-Regular.ttf")
+    c.text((w / 2, h * 0.5), "H A L O", h * 0.3, (255, 255, 255, 255), name="Kenney Future.ttf")
     a = np.asarray(c.img, np.float32)
     ramp = np.linspace(0, 1, a.shape[0])[:, None]
     shade = np.where(ramp < 0.5, 1.0 - 0.5 * ramp, 0.35 + 0.9 * (ramp - 0.5))      # chrome: light top, dark band, light foot
@@ -369,24 +369,34 @@ def map_card(name, tag, sk, index, im, face, base):
 
 
 def title(name, tag, sk, index, im, face, base):
-    """menu titles: text set in OpenCE-Regular (the upstream port's pictures of it)"""
+    """menu titles, drawn here: the words and letter positions come from upstream's titles.json
+    (CC0 layout facts); the letters are set in Kenney Future (CC0). Upstream's pictures are not used."""
     global _titles
     if _titles is None:
         listing = json.load(open(os.path.join(CC0, "titles", "titles.json")))["assets"]
         _titles = {(a["tag"].replace("\\", "/") + ".bitmap", a["bitmap"]): a for a in listing}
     a = _titles.get((name, index))
     w, h = im["w"], im["h"]
-    if a is None or not os.path.isfile(os.path.join(CC0, "titles", a["name"] + ".png")):
-        if "carnage" in name:
-            c = Canvas(w, h)
-            c.rrect((40, 20, w - 40, h - 20), 10, fill=NAVY + (215,), outline=BLUE + (255,), width=2)
-            c.line([(40, 68), (w - 40, 68)], BLUE + (255,), 1.5)
-            c.text((60, 52), "POSTGAME CARNAGE REPORT", 30, (150, 190, 255, 255), anchor="ls", name="OpenCE-Regular.ttf")
-            return c.out()
-        return None
-    png = Image.open(os.path.join(CC0, "titles", a["name"] + ".png")).convert("RGBA")
-    return np.asarray(png.resize((w, h), Image.BOX), np.float32)
-
+    c = Canvas(w, h)
+    if a is None:
+        if "carnage" not in name:
+            return None
+        c.rrect((40, 20, w - 40, h - 20), 10, fill=NAVY + (215,), outline=BLUE + (255,), width=2)
+        c.line([(40, 68), (w - 40, 68)], BLUE + (255,), 1.5)
+        c.text((60, 52), "POSTGAME CARNAGE REPORT", 30, (150, 190, 255, 255), anchor="ls", name="Kenney Future.ttf")
+        return c.out()
+    sx = w / a["width"]
+    cap = a["cap"] * sx
+    size = cap / 0.72                       # Kenney Future: cap height is about 0.72 em
+    base_y = h / 2 + cap / 2
+    letters = [ch for ch in a["text"] if ch != " "]
+    if len(letters) == len(a["lefts"]):
+        for ch, x in zip(letters, a["lefts"]):
+            c.text((x * sx, base_y), ch, size, (255, 255, 255, 255), anchor="ls", name="Kenney Future.ttf")
+    else:
+        c.text((a["lefts"][0] * sx if a["lefts"] else 8, base_y), a["text"], size, (255, 255, 255, 255),
+               anchor="ls", name="Kenney Future.ttf")
+    return c.out()
 
 def black(name, tag, sk, index, im, face, base):
     out = np.zeros(base.shape[:2] + (4,), np.float32)

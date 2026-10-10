@@ -5,6 +5,7 @@
 #   D:/n64work/halo/pages_maps2  -> andrewnakas/halo-cleanroom-maps2  (campaign maps)
 # Run only after `python -m games.halo.taint dirty/tags clean/tags --index taint_index` printed
 # "0 failing" for the tags the staged maps were built from; its output is the scan log.
+# It also runs the licence gate (games.halo.license_audit): every shipped asset CC0 or public domain.
 set -e
 WORK=/d/n64work/halo
 # Refuse unless the scan log says 0 failing and is newer than every built map that is staged
@@ -27,6 +28,10 @@ for site in pages pages_maps1 pages_maps2; do
 done
 
 cd "$(dirname "$0")/.."
+for site in pages pages_maps1 pages_maps2; do
+  [ -d "$WORK/$site" ] || continue
+  python -m games.halo.license_audit "$WORK/clean" "$WORK/$site" || { echo "publish: licence audit failed for $site"; exit 1; }
+done
 REPO=andrewnakas/halo-cleanroom
 gh repo view $REPO >/dev/null 2>&1 || gh repo create $REPO --public \
   --description "Halo: Combat Evolved in the browser (WebAssembly) with clean-room maps: CC0 textures and sounds"

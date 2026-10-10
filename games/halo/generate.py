@@ -7,8 +7,8 @@ reads the dirty tree.
   bitmaps  CC0 material picked by the tag's name, tinted to the kept 4x4
            colour grid; alpha drawn by class (drawn.py holds the named ones)
   sounds   CC0 samples picked by sound class and name, fitted to the kept
-           length and loudness outline; announcer lines spoken by Piper
-  fonts    glyphs drawn again with Overpass (OFL) in the kept cells
+           length and loudness outline; announcer lines spoken by Piper (public-domain voices only, see dialog.VOICES)
+  fonts    glyphs drawn again with Kenney Future (CC0) in the kept cells
 """
 import hashlib
 import json
@@ -258,8 +258,8 @@ class Sounds:
     def __init__(self, root):
         import soundfile
         self.sf = soundfile
-        self.files = {}
-        for base, _, files in os.walk(os.path.join(root, "sounds")):
+        self.files, self.root = {}, os.path.join(root, "sounds")
+        for base, _, files in os.walk(self.root):
             for f in files:
                 if f.endswith(".ogg") and "Preview" not in f:
                     self.files[f[:-4]] = os.path.join(base, f)
@@ -283,16 +283,10 @@ class Sounds:
         return names[int(hashlib.md5((rel + salt).encode()).hexdigest(), 16) % len(names)]
 
     def speak(self, text, rate):
-        from piper import PiperVoice
-        from scipy.signal import resample_poly
-        if self.voice is None:
-            self.voice = PiperVoice.load("C:/Users/andre/n64work/piper_voices/en_US-ryan-high.onnx")
-        x = np.concatenate([c.audio_float_array for c in self.voice.synthesize(text)]).astype(np.float32)
+        from . import dialog
+        x = dialog.speak("announcer", text, rate, 1 << 30)
         loud = np.flatnonzero(np.abs(x) > 0.01)
-        if len(loud):
-            x = x[max(0, loud[0] - 300):loud[-1] + 300]
-        return resample_poly(x, rate, self.voice.config.sample_rate)
-
+        return x[max(0, loud[0] - 300):loud[-1] + 300] if len(loud) else x
 
 def fit(x, n, loop):
     """x to exactly n samples: looped (engines, ambience) or squeezed/padded"""
@@ -401,7 +395,7 @@ def generate_sounds(spec, lib, out, match=None):
                 text = re.sub(r"[_\d]+$", "", os.path.basename(rel)[:-6]).replace("_", " ")
                 src = lib.speak(text, rate)
                 spoken += 1
-                lib.used[rel] = "piper:en_US-ryan-high"
+                lib.used[rel] = "piper:" + dialog.CAST["announcer"][0]
             elif "/dialog/" in low and str(h) in spoken_text.get(rel, {}).get("lines", {}):
                 # a transcribed line (text is the kept fact) in a placeholder voice
                 who = dialog.speaker(rel)
@@ -417,7 +411,7 @@ def generate_sounds(spec, lib, out, match=None):
             else:
                 name = lib.pick(rel, perms[h]["name"])
                 src = lib.load(name, rate)
-                lib.used[rel] = name
+                lib.used[rel] = os.path.relpath(lib.files[name], lib.root).replace(chr(92), "/")   # <pack>/...: the audit maps it to its row
             x = fit(src.copy(), total, loop)
             pos = 0
             for i in chain:
@@ -488,7 +482,7 @@ def main():
     if only in (None, "sounds"):
         generate_sounds(spec, Sounds(cc0), out, match)
     if only in (None, "fonts"):
-        generate_fonts(spec, os.path.join(cc0, "fonts", "Overpass-900.ttf"), out)
+        generate_fonts(spec, os.path.join(cc0, "fonts", "Kenney Future.ttf"), out)
     if "--add" in sys.argv and only is None:
         os.remove(pending)
 

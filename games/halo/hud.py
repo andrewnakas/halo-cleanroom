@@ -188,7 +188,7 @@ def hud_unit_backgrounds(name, tag, sk, index, im, face, base):
         c.poly([(54, 6), (74, 6), (64, 20)], fill=(255, 255, 255, 200))
         c.text((40, 27), "15m", 7, W, anchor="mm")
     else:
-        c.text((6, 16), VEHICLES.get(index, ""), 11, W, anchor="lm", name="Overpass-750.ttf")
+        c.text((6, 16), VEHICLES.get(index, ""), 11, W, anchor="lm", name="Kenney Future Narrow.ttf")
         c.ellipse((96, 12, 104, 20), outline=W, width=1)
         c.line([(104, 16), (112, 16)], W, 1.5)
     return c.out()
@@ -201,7 +201,7 @@ def hud_numbers(name, tag, sk, index, im, face, base):
     c = Canvas(im["w"], im["h"])
     for si, k, (l, t, r, b) in rects(sk, index, im):
         ch = str(k) if k < 10 else DIGITS.get(k, "")
-        c.text(((l + r) / 2, (t + b) / 2 + 0.5), ch, (b - t) * 1.05, W, name="Overpass-900.ttf")
+        c.text(((l + r) / 2, (t + b) / 2 + 0.5), ch, (b - t) * 1.05, W, name="Kenney Future.ttf")
     return c.out()
 
 
@@ -215,7 +215,7 @@ def hud_warnings(name, tag, sk, index, im, face, base):
     for si, k, (l, t, r, b) in rects(sk, index, im):
         label = WARNINGS.get((round(l), round(t)))
         if label:
-            c.d.multiline_text(((l + r) / 2 * SS, (t + b) / 2 * SS), label, font=font(9 * SS, "Overpass-750.ttf"),
+            c.d.multiline_text(((l + r) / 2 * SS, (t + b) / 2 * SS), label, font=font(9 * SS, "Kenney Future Narrow.ttf"),
                                fill=W, anchor="mm", align="center", spacing=0)
         elif r - l > 20:
             c.poly([(l + 2, b - 1), ((l + r) / 2, t + 1), (r - 2, b - 1)], outline=W, width=1)
@@ -347,8 +347,8 @@ def hud_single(name, tag, sk, index, im, face, base):
     elif "health_base" in name:
         slant_bar(c, (4, 8, 120, 24), 0.4, fill=(255, 255, 255, 60), outline=W)
     elif "caption" in name:
-        c.text((6, 9), "TARGET DISTANCE:", 9, W, anchor="lm", name="Overpass-750.ttf")
-        c.text((6, 23), "TARGET ELEVATION:", 9, W, anchor="lm", name="Overpass-750.ttf")
+        c.text((6, 9), "TARGET DISTANCE:", 9, W, anchor="lm", name="Kenney Future Narrow.ttf")
+        c.text((6, 23), "TARGET ELEVATION:", 9, W, anchor="lm", name="Kenney Future Narrow.ttf")
     elif "reticles_scope" in name:
         c.text((2, 12), "2x", 16, W, anchor="lm")
         c.text((2, 36), "10x", 16, W, anchor="lm")
