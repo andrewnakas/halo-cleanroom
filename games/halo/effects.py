@@ -158,7 +158,33 @@ def planet(name, tag, sk, index, im, face, base):
     return out
 
 
+def galaxy(name, tag, sk, index, im, face, base):
+    """a galaxy seen edge on: a bright bulge, a grainy disc with dust lanes, stars around it"""
+    w, h = im["w"], im["h"]
+    rng = np.random.default_rng(_seed(name, index))
+    y, x = np.mgrid[0:h, 0:w]
+    u, v = (x + 0.5) / w * 2 - 1, (y + 0.5) / h * 2 - 1
+    grid = np.asarray(im["faces"][face]["grid"], np.float32)
+    lum = grid.mean(1)
+    bright, mean = grid[lum.argmax()], grid.mean(0)
+    if bright.max() > 8:
+        bright = bright * min(3.0, 255 / bright.max())
+    clumps = noise(w, h, 24, rng) * 0.6 + noise(w, h, 60, rng) * 0.4
+    disc = np.exp(-(v / 0.2) ** 2) * np.exp(-(u / 0.85) ** 4) * (0.35 + 0.65 * clumps)
+    bulge = np.exp(-(u / 0.22) ** 2 - (v / 0.42) ** 2)
+    lanes = np.clip(1 - 1.6 * np.exp(-((v - 0.05 * np.sin(u * 7 + 1)) / 0.045) ** 2) * (0.3 + 0.7 * noise(w, h, 18, rng)), 0, 1)
+    glow = np.clip(disc * lanes * 0.8 + bulge * 1.1, 0, 1)
+    out = np.zeros((h, w, 4), np.float32)
+    out[..., :3] = np.clip(mean[None, None] * glow[..., None] * 1.2 + (bright - mean)[None, None] * (bulge ** 2)[..., None], 0, 255)
+    n = w * h // 260
+    ys, xs = rng.integers(0, h, n), rng.integers(0, w, n)
+    out[ys, xs, :3] = np.maximum(out[ys, xs, :3], (rng.random((n, 1)) ** 4 * 200 + 30))
+    out[..., 3] = 255 if im["faces"][face]["alpha"] == "opaque" else out[..., :3].max(-1)
+    return out
+
+
 DRAWERS = [
+    (r"^sky/.*galaxy", galaxy),
     (r"^sky/.*(stars|star twinkle)|/stars\.bitmap", stars),
     (r"^sky/planets/", planet),
     (r"^effects/(?!zmaps)|lens|flare|contrail|glow|^sky/.*(galaxy|star mask|cloud mask)", effect),

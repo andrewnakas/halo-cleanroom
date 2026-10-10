@@ -33,7 +33,9 @@ gh repo view $REPO >/dev/null 2>&1 || gh repo create $REPO --public \
 git remote get-url origin >/dev/null 2>&1 || git remote add origin https://github.com/$REPO.git
 git push -u origin main
 
-# each site is one fresh commit (no history of old maps), force-pushed to gh-pages
+# each site is one fresh commit (no history of old maps), force-pushed to gh-pages,
+# under this repository's git identity (a fresh `git init` has none)
+NAME=$(git config user.name); EMAIL=$(git config user.email)
 push_site() {
   dir=$WORK/$1; repo=$2; what=$3
   [ -d "$dir/clean" ] || return 0
@@ -43,7 +45,7 @@ push_site() {
   git init -q -b gh-pages
   touch .nojekyll
   git add -A
-  git commit -q -m "${SITE_MESSAGE:-Site}: taint 0 failing"
+  git -c user.name="$NAME" -c user.email="$EMAIL" commit -q -m "${SITE_MESSAGE:-Site}: taint 0 failing"
   git remote add origin "https://github.com/$repo.git"
   git push -q -f origin gh-pages
   gh api -X POST "repos/$repo/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 || true
