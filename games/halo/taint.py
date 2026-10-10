@@ -146,6 +146,7 @@ def main():
     if True:
         keep_match, MATCH = MATCH, (None if cache else MATCH)
 
+        bucketed_before = meta.get("bucketed", 0) if cache and os.path.isfile(os.path.join(cache, "meta.json")) else 0
         indexed = dict(retail)       # the streams whose hashes are on disk (an interrupted run resumes there)
         last_tag = [None]
 
@@ -162,7 +163,7 @@ def main():
                 done = {k: v for k, v in retail.items() if upto is None or k.split("#")[0] != upto}
                 indexed.update(done)
                 tmp = os.path.join(cache, "meta.json.tmp")
-                json.dump({"streams": indexed, "chunks": len(chunks)}, open(tmp, "w"))
+                json.dump({"streams": indexed, "chunks": len(chunks), "bucketed": bucketed_before}, open(tmp, "w"))
                 os.replace(tmp, os.path.join(cache, "meta.json"))
         for label, s in streams(dirty):
             tag = label.split("#")[0]
@@ -175,9 +176,34 @@ def main():
         if batch:
             flush()
         elif cache:
-            json.dump({"streams": retail, "chunks": len(chunks)}, open(os.path.join(cache, "meta.json"), "w"))
+            json.dump({"streams": retail, "chunks": len(chunks), "bucketed": bucketed_before},
+                      open(os.path.join(cache, "meta.json"), "w"))
         MATCH, SKIP = keep_match, set()
     n_retail = len(retail)
+
+    # The index again by the hash's top byte (bucket_000.bin .. bucket_255.bin), written once
+    # per chunk with sequential reads: a scan then reads each bucket whole instead of 256
+    # slices out of every chunk (50,000 seeks, two hours on a busy disk).
+    bucketed = False
+    if cache:
+        meta_path = os.path.join(cache, "meta.json")
+        meta = json.load(open(meta_path))
+        done = meta.get("bucketed", 0)
+        if done < len(chunks):
+            outs = [open(os.path.join(cache, f"bucket_{k:03d}.bin"), "ab" if done else "wb") for k in range(256)]
+            edges = (np.arange(1, 256, dtype=np.uint64) << np.uint64(56))
+            for i in range(done, len(chunks)):
+                whole = np.load(os.path.join(cache, f"chunk_{i}.npy"))
+                cuts = np.concatenate([[0], np.searchsorted(whole, edges), [len(whole)]])
+                for k in range(256):
+                    if cuts[k + 1] > cuts[k]:
+                        outs[k].write(whole[cuts[k]:cuts[k + 1]].astype("<u8").tobytes())
+            for f in outs:
+                f.close()
+            meta["bucketed"] = len(chunks)
+            json.dump(meta, open(meta_path + ".tmp", "w"))
+            os.replace(meta_path + ".tmp", meta_path)
+        bucketed = True
 
     def scan(labelled):
         """Every clean window against the retail index, as a partitioned join: with the
@@ -229,16 +255,20 @@ def main():
                 rec = np.fromfile(os.path.join(work, f"{k:03d}.bin"), record)
                 if not len(rec):
                     continue
-                lo_key = np.uint64(k) << np.uint64(56)
-                parts = []
-                for index in chunks:
-                    lo = int(np.searchsorted(index, lo_key))
-                    hi = len(index) if k == buckets - 1 else int(np.searchsorted(index, np.uint64(k + 1) << np.uint64(56)))
-                    if hi > lo:
-                        parts.append(np.asarray(index[lo:hi]))
-                if not parts:
+                if bucketed:
+                    path = os.path.join(cache, f"bucket_{k:03d}.bin")
+                    retail_part = np.sort(np.fromfile(path, "<u8")) if os.path.exists(path) else np.zeros(0, "<u8")
+                else:
+                    lo_key = np.uint64(k) << np.uint64(56)
+                    parts = []
+                    for index in chunks:
+                        lo = int(np.searchsorted(index, lo_key))
+                        hi = len(index) if k == buckets - 1 else int(np.searchsorted(index, np.uint64(k + 1) << np.uint64(56)))
+                        if hi > lo:
+                            parts.append(np.asarray(index[lo:hi]))
+                    retail_part = np.sort(np.concatenate(parts)) if parts else np.zeros(0, "<u8")
+                if not len(retail_part):
                     continue
-                retail_part = np.sort(np.concatenate(parts))
                 pos = np.minimum(np.searchsorted(retail_part, rec["h"]), len(retail_part) - 1)
                 hit = retail_part[pos] == rec["h"]
                 if hit.any():
