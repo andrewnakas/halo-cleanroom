@@ -51,6 +51,12 @@ push_site() {
   gh api -X POST "repos/$repo/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 || true
   echo "pushed $1 -> $repo ($(du -sh --exclude=.git . | cut -f1))"
 }
+# `sh tools/publish_halo.sh pages` pushes the game's site alone (a launcher fix; maps unchanged)
+if [ "$1" = "pages" ]; then
+  push_site pages $REPO "Halo: Combat Evolved in the browser (WebAssembly) with clean-room maps: CC0 textures and sounds"
+  echo "https://andrewnakas.github.io/halo-cleanroom/"
+  exit 0
+fi
 # the map repos first: the game's manifest points at them
 push_site pages_maps1 andrewnakas/halo-cleanroom-maps1 "Clean-room campaign maps for andrewnakas.github.io/halo-cleanroom (part 1)"
 push_site pages_maps2 andrewnakas/halo-cleanroom-maps2 "Clean-room campaign maps for andrewnakas.github.io/halo-cleanroom (part 2)"
