@@ -426,8 +426,10 @@ def generate_sounds(spec, lib, out, match=None):
                     # the band outline: each band's level over time, whatever the source was
                     rng = np.random.default_rng(n + 7919 * reseed(rel) + i)
                     # (a noisy original gets noise in the source too, by how noisy it is)
-                    grit = rng.standard_normal(n).astype(np.float32) * 0.08 * float(perms[i].get("flat", 0.5))
-                    seg = bands.shape(x[pos:pos + n] + grit, perms[i]["bands"], rate, rng)
+                    # (loops, ambience and music stay smooth: no added noise, a steadier outline)
+                    steady = loop or n > 3 * rate or bool(re.search(r"ambience|music|sinomatixx", low))
+                    grit = 0 if steady else rng.standard_normal(n).astype(np.float32) * 0.08 * float(perms[i].get("flat", 0.5))
+                    seg = bands.shape(x[pos:pos + n] + grit, perms[i]["bands"], rate, rng, steady)
                 else:
                     seg = shape(x[pos:pos + n], perms[i]["outline"], 3.0 if said_line else None, reseed(rel))
                 pos += n

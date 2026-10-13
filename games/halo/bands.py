@@ -81,23 +81,35 @@ def _apply(x, gain_db, rate):
     return out
 
 
-def shape(x, target, rate, rng):
+def shape(x, target, rate, rng, steady=False):
     """x (float, any content) with every band's level over time set to the outline.
-    Bands the source hardly holds are filled from noise, so the outline is always met."""
+    Bands the source hardly holds are filled from noise, but only bands that matter in
+    the sound (within 24 dB of its loudest band at that moment): a faint band made of
+    noise is heard as static. steady (loops, ambience): the outline is smoothed over time
+    first, so 3 dB steps between windows do not flutter (a fluttering hiss is static)."""
     target = np.asarray(target, np.float32)
     n = len(x)
     want = np.where(target <= FLOOR, -120.0, target)
+    if steady and len(want) >= 3:
+        from scipy.ndimage import gaussian_filter1d
+        audible = want > -119
+        smooth = gaussian_filter1d(np.where(audible, want, FLOOR), 2.0, axis=0, mode="wrap")
+        want = np.where(audible, smooth, -120.0)
     source = np.asarray(x, np.float32)
     if len(source) < SEG:
         source = np.concatenate([source, np.zeros(SEG - len(source), np.float32)])
-    noise = rng.standard_normal(len(source)).astype(np.float32) * 0.05
+    cap = 30.0
     lift = want - measure(source, rate, len(target))
-    out = _apply(source, np.clip(lift, -120.0, 36.0), rate)
-    # the noise carries what the source could not reach (its gain is capped at 36 dB)
-    out = out + _apply(noise, np.where(lift <= 36.0, -120.0, want - measure(noise, rate, len(target))), rate)
+    out = _apply(source, np.clip(lift, -120.0, cap), rate)
+    # noise carries what the source could not reach, in the bands that carry the sound
+    matters = want >= want.max(1, keepdims=True) - 24.0
+    noise = rng.standard_normal(len(source)).astype(np.float32) * 0.05
+    fill = np.where((lift > cap) & matters, want - measure(noise, rate, len(target)), -120.0)
+    out = out + _apply(noise, fill, rate)
     # the gains glide between windows, which smears sharp attacks: correct once more
+    # (downward freely, upward only a little: lifting a near-empty band lifts its noise)
     for _ in range(2):
-        out = _apply(out, np.clip(want - measure(out, rate, len(target)), -24.0, 24.0), rate)
+        out = _apply(out, np.clip(want - measure(out, rate, len(target)), -24.0, 6.0 if steady else 12.0), rate)
     out = out[:n]
     # a few LSB of noise so silence is ours, and a soft ceiling
     return np.tanh(out * 1.1) / 1.1 + rng.normal(0, 4e-4, n).astype(np.float32)
