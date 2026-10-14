@@ -149,3 +149,24 @@ piper:en_US-joe-medium,tts-voice,dialogue (placeholder),https://github.com/rhass
 piper:en_US-kristin-medium,tts-voice,dialogue (placeholder),https://github.com/rhasspy/piper (synthetic voice; placeholder until the owner's recordings),MIT (engine)
 piper:en_US-hfc_female-medium,tts-voice,dialogue (placeholder),https://github.com/rhasspy/piper (synthetic voice; placeholder until the owner's recordings),MIT (engine)
 vector_palette.json,table,bump-map normals,https://github.com/OpenCommunityEdition/OpenCE (source/bitmaps/bitmaps.c),CC0-1.0
+music/choir/chant.ogg,music-track,choir,https://opengameart.org/content/chant,CC0-1.0
+music/choir/Fantasy Choir 1.mp3,music-track,choir,https://opengameart.org/content/fantasy-choir-3-orchestral-pieces,CC0-1.0
+music/choir/Fantasy Choir 2.mp3,music-track,choir,https://opengameart.org/content/fantasy-choir-3-orchestral-pieces,CC0-1.0
+music/choir/Fantasy Choir 3.mp3,music-track,choir,https://opengameart.org/content/fantasy-choir-3-orchestral-pieces,CC0-1.0
+music/choir/ChoirChordsBassMaster.wav,music-track,choir,https://opengameart.org/content/epic-endgame-cinematic,CC0-1.0
+music/choir/2-hymn_16-bit-original.mp3,music-track,choir,https://opengameart.org/content/original-hymn,CC0-1.0
+music/battle/determined_pursuit_loop.wav,music-track,battle,https://opengameart.org/content/determined-pursuit-epic-orchestra-loop,CC0-1.0
+music/battle/prepare_to_fight.mp3,music-track,battle,https://opengameart.org/content/prepare-to-fight,CC0-1.0
+music/battle/A Legend Will Rise.mp3,music-track,battle,https://opengameart.org/content/a-legend-will-rise-orchestral,CC0-1.0
+music/battle/Production_Intro_Theme.wav,music-track,battle,https://opengameart.org/content/production-theme-intro-epic-orchestra,CC0-1.0
+music/battle/New Sunrise.wav,music-track,battle,https://opengameart.org/content/new-sunrise,CC0-1.0
+music/eerie/airy_0.ogg,music-track,eerie,https://opengameart.org/content/dark-sci-fi-audio-pack,CC0-1.0
+music/eerie/pulse_0.ogg,music-track,eerie,https://opengameart.org/content/dark-sci-fi-audio-pack,CC0-1.0
+music/eerie/sector_0.ogg,music-track,eerie,https://opengameart.org/content/dark-sci-fi-audio-pack,CC0-1.0
+music/eerie/The Surreal Truth.mp3,music-track,eerie,https://opengameart.org/content/ambience-pack-1-sci-fi-horror,CC0-1.0
+music/eerie/Final Captain's Log.mp3,music-track,eerie,https://opengameart.org/content/ambience-pack-1-sci-fi-horror,CC0-1.0
+music/eerie/Infestation in the Control Room.mp3,music-track,eerie,https://opengameart.org/content/ambience-pack-1-sci-fi-horror,CC0-1.0
+music/eerie/Evil Approach.wav,music-track,eerie,https://opengameart.org/content/evil-approach,CC0-1.0
+music/strings/Lament of the War - Lossless FLAC.flac,music-track,strings,https://opengameart.org/content/laments-of-the-war,CC0-1.0
+music/strings/Hope.mp3,music-track,strings,https://opengameart.org/content/the-hope,CC0-1.0
+music/strings/tad_-_unexplored_-_expanded_1_by_bo_jingles.mp3,music-track,strings,https://opengameart.org/content/unexplored-expansion,CC0-1.0

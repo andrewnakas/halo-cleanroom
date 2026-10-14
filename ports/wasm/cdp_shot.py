@@ -57,6 +57,7 @@ def main():
     ap.add_argument("--t0-timeout", type=float, default=600)
     ap.add_argument("--grace", type=float, default=120, help="seconds to wait for late screenshots at the end")
     ap.add_argument("--eval", action="append", default=[], help='"<seconds>:<javascript>" evaluated in the page')
+    ap.add_argument("--profile", default="", help="browser profile folder to reuse (a returning visitor)")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     exe = next(b for b in BROWSERS if os.path.exists(b))
@@ -77,7 +78,7 @@ def main():
         raise SystemExit(f"port {a.port} already has a debugging browser; pass --port")
     except OSError:
         pass
-    prof = tempfile.mkdtemp(prefix="cdpshot_")
+    prof = a.profile or tempfile.mkdtemp(prefix="cdpshot_")
     args = [exe, "--headless=new", f"--user-data-dir={prof}", f"--remote-debugging-port={a.port}",
             "--remote-allow-origins=*", "--no-first-run", "--autoplay-policy=no-user-gesture-required",
             f"--window-size={a.size}", "--enable-unsafe-webgpu", "--ignore-gpu-blocklist",
@@ -113,7 +114,8 @@ def main():
             meth = m.get("method")
             if meth == "Runtime.consoleAPICalled":
                 text = " ".join(str(x.get("value", x.get("description", ""))) for x in m["params"]["args"])
-                console.append(f"[{m['params']['type']}] {text[:2000]}")
+                # (REC lines carry a recording in base64: kept whole)
+                console.append(f"[{m['params']['type']}] {text if text.startswith('REC') else text[:2000]}")
                 if started[0] is None and re.search(a.t0, text):
                     started[0] = time.time()
             elif meth == "Runtime.exceptionThrown":
@@ -183,7 +185,8 @@ def main():
     finally:
         p.kill()
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
-        shutil.rmtree(prof, ignore_errors=True)
+        if not a.profile:
+            shutil.rmtree(prof, ignore_errors=True)
         with open(os.path.join(a.out, "console.txt"), "w", encoding="utf-8") as f:
             f.write("\n".join(console))
     late = f"; MISSING shots {','.join(missing)}" if missing else ""

@@ -258,6 +258,7 @@ class Sounds:
     def __init__(self, root):
         import soundfile
         self.sf = soundfile
+        self.root = root
         self.files = {}
         for base, _, files in os.walk(os.path.join(root, "sounds")):
             for f in files:
@@ -363,7 +364,8 @@ def murmur(n, rate, seed):
 
 
 def generate_sounds(spec, lib, out, match=None):
-    from . import bands, dialog
+    from . import bands, dialog, music
+    music.ROOT = os.path.join(lib.root, "music")
     facts = json.load(open(os.path.join(spec, "sounds.json")))
     spoken = 0
     text_path = os.path.join(spec, "dialog.json")
@@ -414,24 +416,39 @@ def generate_sounds(spec, lib, out, match=None):
             elif "/dialog/" in low:
                 src = murmur(max(total, 1), rate, int(hashlib.md5((rel + perms[h]["name"]).encode()).hexdigest()[:8], 16))
                 lib.used[rel] = "murmur (synthesised)"
+            elif music.is_music(rel):
+                # each permutation chain is one variation the game picks between: same key, own melody
+                src, track = music.music(rel, max(total, 1), rate, loop, variant=perms[h]["name"])
+                lib.used[rel] = "music/" + track
+            elif music.is_ambience(rel):
+                src = music.ambience(rel, max(total, 1), rate, loop)
+                lib.used[rel] = "music.py ambience (synthesised)"
             else:
                 name = lib.pick(rel, perms[h]["name"])
                 src = lib.load(name, rate)
                 lib.used[rel] = name
             x = fit(src.copy(), total, loop)
+            # The whole chain is shaped at once and only then cut into its permutations: shaped
+            # one by one, each chunk (~1.3 s) had its own gain curve and every join clicked.
+            outline = [v for i in chain for v in perms[i]["outline"]]
+            if music.is_music(rel):
+                # music keeps its own sound: only the original's swells (loudness outline)
+                whole = music.edges(music.level(x, outline), rate)
+            elif all("bands" in perms[i] for i in chain) and not said_line and "/dialog/" not in low:
+                # the band outline: each band's level over time, whatever the source was
+                rng = np.random.default_rng(total + 7919 * reseed(rel) + h)
+                # quiet bands (v0.6): no added noise, at most 12 dB of lift per band, then the
+                # loudness outline across the board (at most 6 dB): the noisy v0.5 way (grit,
+                # noise fill, 30 dB lift) was heard as hiss and static
+                steady = loop or total > 3 * rate or bool(re.search(r"ambience|music|sinomatixx", low))
+                whole = bands.shape(x, [w for i in chain for w in perms[i]["bands"]], rate, rng, steady, quiet=True)
+                whole = shape(whole, outline, 2.0, reseed(rel))
+            else:
+                whole = shape(x, outline, 3.0 if said_line else None, reseed(rel))
             pos = 0
             for i in chain:
                 n = perms[i]["samples"]
-                if "bands" in perms[i] and not said_line and "/dialog/" not in low:
-                    # the band outline: each band's level over time, whatever the source was
-                    rng = np.random.default_rng(n + 7919 * reseed(rel) + i)
-                    # (a noisy original gets noise in the source too, by how noisy it is)
-                    # (loops, ambience and music stay smooth: no added noise, a steadier outline)
-                    steady = loop or n > 3 * rate or bool(re.search(r"ambience|music|sinomatixx", low))
-                    grit = 0 if steady else rng.standard_normal(n).astype(np.float32) * 0.08 * float(perms[i].get("flat", 0.5))
-                    seg = bands.shape(x[pos:pos + n] + grit, perms[i]["bands"], rate, rng, steady)
-                else:
-                    seg = shape(x[pos:pos + n], perms[i]["outline"], 3.0 if said_line else None, reseed(rel))
+                seg = whole[pos:pos + n]
                 pos += n
                 pcm = np.clip(seg * 32767, -32768, 32767).astype(np.int16)
                 pcm = np.repeat(pcm[:, None], s["channels"], 1)

@@ -81,7 +81,7 @@ def _apply(x, gain_db, rate):
     return out
 
 
-def shape(x, target, rate, rng, steady=False):
+def shape(x, target, rate, rng, steady=False, quiet=False):
     """x (float, any content) with every band's level over time set to the outline.
     Bands the source hardly holds are filled from noise, but only bands that matter in
     the sound (within 24 dB of its loudest band at that moment): a faint band made of
@@ -98,18 +98,20 @@ def shape(x, target, rate, rng, steady=False):
     source = np.asarray(x, np.float32)
     if len(source) < SEG:
         source = np.concatenate([source, np.zeros(SEG - len(source), np.float32)])
-    cap = 30.0
+    # quiet: no noise anywhere and at most 12 dB of lift (a lifted band lifts the sample's own
+    # noise floor with it: 30 dB of lift plus noise fill was heard as hiss and static)
+    cap = 12.0 if quiet else 30.0
     lift = want - measure(source, rate, len(target))
     out = _apply(source, np.clip(lift, -120.0, cap), rate)
     # noise carries what the source could not reach, in the bands that carry the sound
     matters = want >= want.max(1, keepdims=True) - 24.0
     noise = rng.standard_normal(len(source)).astype(np.float32) * 0.05
-    fill = np.where((lift > cap) & matters, want - measure(noise, rate, len(target)), -120.0)
+    fill = np.where((lift > cap) & matters & (not quiet), want - measure(noise, rate, len(target)), -120.0)
     out = out + _apply(noise, fill, rate)
     # the gains glide between windows, which smears sharp attacks: correct once more
     # (downward freely, upward only a little: lifting a near-empty band lifts its noise)
     for _ in range(2):
-        out = _apply(out, np.clip(want - measure(out, rate, len(target)), -24.0, 6.0 if steady else 12.0), rate)
+        out = _apply(out, np.clip(want - measure(out, rate, len(target)), -24.0, 3.0 if quiet else 6.0 if steady else 12.0), rate)
     out = out[:n]
     # a few LSB of noise so silence is ours, and a soft ceiling
     return np.tanh(out * 1.1) / 1.1 + rng.normal(0, 4e-4, n).astype(np.float32)

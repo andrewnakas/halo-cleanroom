@@ -14,6 +14,9 @@ texture, sound, voice line and font glyph is made again from CC0/OFL sources or 
 - Lighting: lightmaps are baked here from each level's own geometry and the sky's light directions.
 - Menu pictures of the levels are renders of that geometry.
 - Sounds: [Kenney](https://kenney.nl) packs (CC0) fitted to each sound's length and loudness outline.
+- Music: recorded CC0 tracks from [OpenGameArt](https://opengameart.org) (Gregorian chant for the menu,
+  choir, orchestral, dark ambient and string pieces), cut to each track's length and set to its average
+  loudness; none of the original score's notes are used. Ambience is smooth synthesised wind and room tone.
 - Voices: the spoken lines are kept as text only (transcribed) and said again by synthetic placeholder voices
   (Piper). No performer is cloned and nothing is trained on the game's audio.
 - Sources are listed in `assets/LICENSES.csv`.
