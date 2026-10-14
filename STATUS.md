@@ -1,5 +1,29 @@
 # Halo: Combat Evolved clean room: status
 
+## HANDOFF 2026-10-13: v0.5 staged, scanned, smoke-tested; waiting on the owner's publish
+- **What v0.5 is:** every sound follows a coarse band outline of its original (8 bands x <= 64 windows, 3 dB;
+  `bands.py`). Loops, ambience and music use a smoothed outline and no added noise (the static the owner heard in
+  `0.5-local2`); noise fill only in bands within 24 dB of the loudest. Launcher removes maps stored from an earlier
+  clean version (OpenCE `web` commit cb36cd22).
+- **Taint on the final tree:** `25638 generated streams scanned against 25638 retail streams; 13892 with short
+  coincidental matches; 0 failing` (`D:/n64work/halo/taint_v05_full.log`, copied to `taint_site.log`, 20:36, newer
+  than every map built 19:52). Four sounds needed reseeding on the way (`taint_reseed.json`): covydrop,
+  light_rings, index (twice: seed 2). All were 33-49 B runs on the ADPCM decoder's fixed-step slew ramps at a
+  sound's start, not content. Thresholds unchanged. `D:/n64work/halo/v05_chain.ps1` = reseed one sound -> scan it
+  -> rebuild all -> full scan.
+- **Staged:** `D:/n64work/halo/pages` (manifest 0.5, 15 maps, 441 MB), `pages_maps1` (587 MB), `pages_maps2`
+  (596 MB). Local test root `D:/n64work/halo/stage_root` served on 8073.
+- **Smoke (headless, real GPU, staged site):** a10, a30 (maps1), c10, d40 (maps2) download on demand and play 90 s
+  with 0 error lines; Blood Gulch quick play runs. Sheet `D:/n64work/halo/shots/smoke_v05/sheet.png`. 7-24 fps
+  (machine busy with other sessions).
+- **Not done (auto mode denied git commit and publish in this session):**
+  1. `cd /d/n64work/halo-cleanroom && git add games/halo/taint_reseed.json STATUS.md && git commit -m "v0.5: reseeds, status"`
+  2. `SITE_MESSAGE="v0.5" sh /d/n64work/halo-cleanroom/tools/publish_halo.sh > /d/n64work/halo/publish_v05.log 2>&1`
+  3. `cd /d/n64work/halo/OpenCE && git push mine web`
+  4. Live check: manifest says 0.5, one campaign level downloads from each map repo.
+- No Windows exe of OpenCE has been built here (`OpenCE/build/windows` holds only empty folders); the clean maps
+  are plain Xbox `.map` files, so a native build could load `D:/n64work/halo/clean/maps` directly.
+
 ## Now (2026-10-09, end of session 2)
 - **PUBLISHED v0.4**: https://andrewnakas.github.io/halo-cleanroom/ : menu, 13 multiplayer maps and the whole
   campaign (10 levels, downloaded as you reach them), taint 0 failing. Repos `andrewnakas/halo-cleanroom` (main =

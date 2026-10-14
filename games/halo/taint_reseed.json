@@ -2,5 +2,8 @@
  "sound/sfx/ambience/exteriors/detail/waves/medwave.sound": 1,
  "sound/sfx/ambience/emitters/covy_ship.sound": 1,
  "sound/sfx/impulse/doors/c10elevator_loop.sound": 1,
- "sound/sfx/ui/pickup_health.sound": 1
+ "sound/sfx/ui/pickup_health.sound": 1,
+ "sound/sfx/vehicles/covydrop.sound": 1,
+ "sound/sfx/ambience/emitters/light_rings.sound": 1,
+ "sound/sfx/ambience/emitters/index.sound": 2
 }
