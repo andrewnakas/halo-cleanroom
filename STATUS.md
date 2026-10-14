@@ -1,6 +1,19 @@
 # Halo: Combat Evolved clean room: status
 
-## HANDOFF 2026-10-13: v0.5 staged, scanned, smoke-tested; waiting on the owner's publish
+## 2026-10-14: launcher = one "Load into menu" button (live, checked)
+- The owner could not load the site: a first visit waited for the service worker to cache the 6 MB shell
+  before the page did anything (Pages served files in up to 15 s each, so a blank launcher for a minute+).
+  Now the first worker activates at once and caches in the background; the page shows one big
+  "Load into menu" button (fetches ui.map, starts the main menu); multiplayer, downloads, disc and settings sit
+  in a collapsed section below. OpenCE `web` 25f8e834. Live check with a fresh profile: button ready at 4 s,
+  click -> main menu (`D:/n64work/halo/shots/simple_live/`).
+
+## HANDOFF 2026-10-13: v0.5 PUBLISHED and checked live
+- Live 22:46: manifest 0.5; a30 (maps1) and c10 (maps2) pieces match the manifest; c10 downloaded and played 90 s
+  from the live page, 0 error lines (`D:/n64work/halo/shots/live_v05/`). The owner ran the publish
+  (`D:/n64work/halo/publish_v05.sh`: the first try got HTTP 408 on the maps1 push; a 1 GB `http.postBuffer` fixed it).
+  Pages deploys of the 430-590 MB sites sat at "building" for ~20 min and then finished by themselves.
+  The steps listed below as not done were all done.
 - **What v0.5 is:** every sound follows a coarse band outline of its original (8 bands x <= 64 windows, 3 dB;
   `bands.py`). Loops, ambience and music use a smoothed outline and no added noise (the static the owner heard in
   `0.5-local2`); noise fill only in bands within 24 dB of the loudest. Launcher removes maps stored from an earlier
