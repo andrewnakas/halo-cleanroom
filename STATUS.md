@@ -1,5 +1,19 @@
 # Halo: Combat Evolved clean room: status
 
+## 2026-10-14 evening: v0.6 PUBLISHED and checked live (sound)
+- **Engine bug fixed (OpenCE web da715f3b):** the port's mixer decoded Xbox ADPCM wrongly (64 nibbles per block
+  instead of header sample + 63 nibbles): a click every 1.45 ms block, worst in music. Proven with `?record=SECONDS`
+  (the page records what it plays; `cdp_shot.py` keeps `REC` console lines whole): engine output went from 14.4
+  clicks/s to 0.02/s (source file 0.0). Retail tags confirm header-first (smooth joins only read that way). Also:
+  blend across packet joins, 128 ms audio lead with soft refill in the worklet, mixer starvation log.
+- **Sounds (halo-cleanroom 13a555b):** music = 21 recorded CC0 tracks from OpenGameArt (`cc0/music/<style>/`,
+  `SOURCES.json`, `assets/LICENSES.csv`; menu = Gregorian chant), one steady gain to the original's average
+  loudness; no retail notes used (owner asked to copy melodies; declined: a cover of the score). Ambience = smooth
+  synthesised wind/room tone. Effects: quiet band shaping (no noise fill, <= 12 dB lift) applied to each whole
+  permutation chain (per-chunk shaping clicked at every 1.3 s join). Dialogue unchanged.
+- Rejected by ear: CC0 SFX shaped as music (buzz), a numpy music synthesiser (sounded wrong).
+- Taint `0 failing` (18:32). Live 20:16: manifest 0.6, a30 played from maps1, live menu recording 0 clicks in 25 s.
+
 ## 2026-10-14: launcher = one "Load into menu" button (live, checked)
 - The owner could not load the site: a first visit waited for the service worker to cache the 6 MB shell
   before the page did anything (Pages served files in up to 15 s each, so a blank launcher for a minute+).
